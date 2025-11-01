@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oect-infra"
-version = "1.0.0"
+version = "1.0.1"
 description = "OECT (Organic Electrochemical Transistor) data processing infrastructure for experiment management, feature engineering, and analysis"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -59,10 +59,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing"
-Documentation = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/blob/main/CLAUDE.md"
-Repository = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing"
-Issues = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/issues"
+Homepage = "https://github.com/Durian-leader/oect-infra-package"
+Documentation = "https://github.com/Durian-leader/oect-infra-package/blob/main/README.md"
+Repository = "https://github.com/Durian-leader/oect-infra-package"
+Issues = "https://github.com/Durian-leader/oect-infra-package/issues"
 
 [project.scripts]
 catalog = "infra.catalog.cli:main"

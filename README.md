@@ -137,16 +137,15 @@ sync:
 
 ## Documentation
 
-- [Complete Documentation](https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/blob/main/CLAUDE.md)
-- [Architecture Guide](https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/blob/main/infra/DEPENDENCIES.md)
-- [Features V2 Guide](https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/blob/main/infra/features_v2/CLAUDE.md)
-- [Catalog System](https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/blob/main/infra/catalog/CLAUDE.md)
+- [Complete Documentation](https://github.com/Durian-leader/oect-infra-package/blob/main/README.md)
+- Package documentation included in the installed package
+- See `infra/` subdirectory for detailed module documentation
 
 ## Examples
 
-Check out example notebooks in the [repository](https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing):
-- `main_v2.ipynb`: Main V2 workflow demonstration
-- `features_v2_custom_demo.ipynb`: Custom feature extraction examples
+Check out example notebooks in the source [repository](https://github.com/Durian-leader/oect-infra-package):
+- Example notebooks and scripts included in package
+- Comprehensive API documentation in module docstrings
 
 ## Contributing
 
@@ -165,14 +164,14 @@ If you use OECT-Infra in your research, please cite:
   author = {lidonghao},
   title = {OECT-Infra: Data Processing Infrastructure for OECT Experiments},
   year = {2025},
-  url = {https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing}
+  url = {https://github.com/Durian-leader/oect-infra-package}
 }
 ```
 
 ## Support
 
 For issues and questions:
-- GitHub Issues: https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/issues
+- GitHub Issues: https://github.com/Durian-leader/oect-infra-package/issues
 - Email: lidonghao100@outlook.com
 
 ## Acknowledgments

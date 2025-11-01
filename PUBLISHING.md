@@ -268,9 +268,9 @@ twine upload dist/*
 If you encounter issues:
 1. Check the [Python Packaging Guide](https://packaging.python.org/)
 2. PyPI support: https://pypi.org/help/
-3. GitHub Issues: https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/issues
+3. GitHub Issues: https://github.com/Durian-leader/oect-infra-package/issues
 
 ---
 
 **Last Updated**: 2025-01-11
-**Package**: oect-infra v1.0.0
+**Package**: oect-infra v1.0.1
