@@ -50,6 +50,15 @@ class ExecutionContext:
 
     def get_statistics(self) -> Dict[str, Any]:
         """获取统计信息"""
+        # 获取最慢特征
+        slowest = None
+        if self.timings:
+            slowest_tuple = max(self.timings.items(), key=lambda x: x[1])
+            slowest = {
+                'name': slowest_tuple[0],
+                'time_ms': slowest_tuple[1]
+            }
+
         return {
             'total_features': len(self.results),
             'total_time_ms': self.get_total_time(),
@@ -58,10 +67,7 @@ class ExecutionContext:
             'avg_time_per_feature_ms': (
                 self.get_total_time() / len(self.timings) if self.timings else 0
             ),
-            'slowest_feature': (
-                max(self.timings.items(), key=lambda x: x[1])
-                if self.timings else None
-            ),
+            'slowest_feature': slowest,
         }
 
 

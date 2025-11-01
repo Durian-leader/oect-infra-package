@@ -5,6 +5,47 @@ All notable changes to the `oect-infra` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.10] - 2025-11-02
+
+### Fixed
+- **Transient Data Loading**: Fixed transient feature extraction in Features V2 system
+  - **Root Cause**: HDF5 files lacked `start_data_index` and `end_data_index` fields in `step_info_table`, causing `KeyError` when loading transient data
+  - **Fixed Files**:
+    - `csv2hdf/direct_csv2hdf.py` (2 locations):
+      - Line 382-404: Serial conversion - now records data index ranges for each transient step
+      - Line 582-614: Parallel conversion - now records data index ranges for each transient step
+    - `features_v2/core/feature_set.py`:
+      - Line 106-166: `load_transient()` - smart loading with backward compatibility
+        - **New Files**: Uses `step_info_table` indices for efficient array slicing (fast)
+        - **Legacy Files**: Falls back to step-by-step loading with warning (slow but compatible)
+  - **Impact**: Transient feature extraction now works with both new and old HDF5 files
+
+- **Statistics Format**: Fixed `get_statistics()` return type in Features V2 executor
+  - **Root Cause**: `slowest_feature` returned tuple `(name, time_ms)` instead of dict, causing `TypeError` when accessing keys
+  - **Fixed Files**:
+    - `features_v2/core/executor.py`:
+      - Line 51-71: Now returns `{'name': str, 'time_ms': float}` dictionary format
+  - **Impact**: Statistics display in notebooks and scripts now works correctly
+
+### Added
+- **Transient Feature Demo**: New comprehensive demo notebook for transient feature extraction
+  - **Location**: `features_v2_transient_demo.ipynb` (repository root)
+  - **Features Demonstrated**:
+    - Charge integral (∫|I(t)|dt) - total charge through device
+    - Peak current, decay time constant, rise time
+    - Steady-state current, max response rate
+    - Multi-dimensional Transient Cycles features
+  - **Includes**: Data exploration, visualization, correlation analysis, config persistence
+
+### Changed
+- **Features V2 Version**: Bumped from 2.0.0 to 2.0.1 (bug fixes)
+- **Backward Compatibility**: Transient loading gracefully handles legacy HDF5 files without indices
+
+### Technical Details
+- New HDF5 files track transient data ranges: `step_info_table['start_data_index']` and `['end_data_index']`
+- Enables O(1) array slicing instead of O(N) step-by-step loading
+- Performance: ~27 seconds to load 5000 transient steps with new format vs. potentially minutes with old approach
+
 ## [1.0.9] - 2025-11-01
 
 ### Fixed
