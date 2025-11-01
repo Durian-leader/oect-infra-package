@@ -5,6 +5,28 @@ All notable changes to the `oect-infra` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.8] - 2025-11-01
+
+### Fixed
+- **V2 Lambda Functions**: Fixed lambda function parameter mismatches in feature configuration files
+  - **Root Cause**: Configuration files used dictionary-style lambdas (`lambda inputs: inputs['key']`) but executor passes positional arguments
+  - **Fixed Files**:
+    - `catalog/feature_configs/v2_ml_ready.yaml` (3 locations):
+      - Line 93: `gm_ratio` → `lambda gm_fwd, gm_rev: gm_fwd / gm_rev`
+      - Line 101: `Von_diff` → `lambda von_fwd, von_rev: von_fwd - von_rev`
+      - Line 111: `gm_max_forward_norm` (verified safe, single input)
+    - `features_v2/config/templates/v2_mixed.yaml` (Line 79):
+      - `gm_to_peak_ratio` → `lambda gm, peak: gm / peak`
+    - `features_v2/config/templates/v2_transfer_basic.yaml` (Line 84):
+      - `gm_ratio` → `lambda gm_fwd, gm_rev: gm_fwd / gm_rev`
+  - **Error Resolved**: `<lambda>() takes 1 positional argument but 2 were given`
+  - **Technical Details**: Executor calls multi-input lambdas as `func(*[val1, val2], **params)`, not `func({'key1': val1, 'key2': val2})`
+
+### Impact
+- V2 feature extraction now works correctly in all modes (single/batch, CLI/Python API)
+- Multi-input derived features (ratios, differences) compute successfully
+- Affects `process_data_pipeline()`, `batch_extract_features_v2()`, and `exp.extract_features_v2()`
+
 ## [1.0.7] - 2025-11-01
 
 ### Fixed

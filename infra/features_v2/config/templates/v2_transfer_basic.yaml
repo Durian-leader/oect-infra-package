@@ -81,7 +81,7 @@ features:
 
   # 7. 派生特征：跨导比率
   - name: gm_ratio
-    func: "lambda inputs: inputs['forward'] / inputs['reverse']"
+    func: "lambda gm_fwd, gm_rev: gm_fwd / gm_rev"
     input:
       - gm_max_forward
       - gm_max_reverse

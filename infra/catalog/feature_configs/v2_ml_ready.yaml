@@ -90,7 +90,7 @@ features:
 
   # 派生特征（特征工程）
   - name: gm_ratio
-    func: "lambda inputs: inputs['gm_max_forward'] / inputs['gm_max_reverse']"
+    func: "lambda gm_fwd, gm_rev: gm_fwd / gm_rev"
     input:
       - gm_max_forward
       - gm_max_reverse
@@ -98,7 +98,7 @@ features:
     description: "正反向跨导比率"
 
   - name: Von_diff
-    func: "lambda inputs: inputs['Von_forward'] - inputs['Von_reverse']"
+    func: "lambda von_fwd, von_rev: von_fwd - von_rev"
     input:
       - Von_forward
       - Von_reverse

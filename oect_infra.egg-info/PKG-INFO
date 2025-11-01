@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: oect-infra
-Version: 1.0.7
+Version: 1.0.8
 Summary: OECT (Organic Electrochemical Transistor) data processing infrastructure for experiment management, feature engineering, and analysis
 Author-email: lidonghao <lidonghao100@outlook.com>
 License: MIT

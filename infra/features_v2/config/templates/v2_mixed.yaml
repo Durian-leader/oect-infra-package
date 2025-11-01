@@ -76,7 +76,7 @@ features:
 
   # 示例 1: 跨导与峰值电流的比率
   - name: gm_to_peak_ratio
-    func: "lambda inputs: inputs['gm_max_forward'] / inputs['transient_peak']"
+    func: "lambda gm, peak: gm / peak"
     input:
       - gm_max_forward
       - transient_peak

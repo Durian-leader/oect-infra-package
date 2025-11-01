@@ -100,7 +100,6 @@ pyproject.toml
 ./infra/features_v2/performance/__init__.py
 ./infra/features_v2/performance/cache.py
 ./infra/features_v2/performance/parallel.py
-./infra/features_v2/tests/test_incremental_compute.py
 ./infra/features_v2/transforms/__init__.py
 ./infra/features_v2/transforms/filter.py
 ./infra/features_v2/transforms/normalize.py
@@ -230,7 +229,6 @@ infra/features_v2/extractors/transient.py
 infra/features_v2/performance/__init__.py
 infra/features_v2/performance/cache.py
 infra/features_v2/performance/parallel.py
-infra/features_v2/tests/test_incremental_compute.py
 infra/features_v2/transforms/__init__.py
 infra/features_v2/transforms/filter.py
 infra/features_v2/transforms/normalize.py
