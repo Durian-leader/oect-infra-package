@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oect-infra"
-version = "1.0.1"
+version = "1.0.4"
 description = "OECT (Organic Electrochemical Transistor) data processing infrastructure for experiment management, feature engineering, and analysis"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -47,6 +47,9 @@ dependencies = [
     "Pillow>=10.0.0",
     "tabulate>=0.9.0",
     "python-pptx>=0.6.21",
+    "numba>=0.57.0",
+    "opencv-python>=4.8.0",
+    "pyarrow>=14.0.0",
 ]
 
 [project.optional-dependencies]
