@@ -5,6 +5,28 @@ All notable changes to the `oect-infra` package will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.9] - 2025-11-01
+
+### Fixed
+- **V2 Feature File Naming Bug**: Fixed hardcoded 'v2_features' in file naming across all V2 feature extraction paths
+  - **Root Cause**: `process_data_pipeline()` and batch extraction used hardcoded 'v2_features' string instead of actual config name
+  - **Fixed Files**:
+    - `catalog/unified.py` (4 locations):
+      - Line 2510: `_extract_v2_wrapper()` filename generation - now uses `{config_name}` instead of hardcoded 'v2_features'
+      - Line 489-495: Removed legacy `v2_features` compatibility scanning code
+      - Line 489: Optimized file pattern from `v2_*-feat_*.parquet` to universal `*-feat_*.parquet`
+    - `catalog/scanner.py` (2 locations):
+      - Line 307: Updated file type detection to use generic Parquet pattern instead of hardcoded 'v2_features'
+      - Line 350: Updated scan patterns list to use `*-feat_*.parquet`
+  - **Naming Convention**: All V2 feature files now consistently use format `{chip_id}-{device_id}-{config_name}-feat_{timestamp}_{hash}.parquet`
+  - **Breaking Change**: Legacy `*-v2_features-*` files are no longer recognized (requires re-extraction with correct naming)
+
+### Impact
+- File naming now correctly reflects the actual config name (e.g., `v2_ml_ready`, `v2_transfer_basic`)
+- Improved cache recognition for incremental feature extraction
+- Better file organization and traceability of feature configurations
+- Consistent behavior between `process_data_pipeline()` and `batch_extract_features_v2()`
+
 ## [1.0.8] - 2025-11-01
 
 ### Fixed
