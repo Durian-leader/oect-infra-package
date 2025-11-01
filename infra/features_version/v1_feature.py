@@ -75,7 +75,7 @@ def v1_feature(raw_file_path: str, output_dir: str = "data/features") -> str:
     logger.info("2. 计算Transfer特征...")
     transfer_data = exp.get_transfer_all_measurement()
 
-    from oect_transfer import BatchTransfer
+    from ..oect_transfer import BatchTransfer
     if transfer_data is not None and 'measurement_data' in transfer_data:
         measurement_3d = transfer_data['measurement_data']
         batch_transfer = BatchTransfer(measurement_3d, device_type="N")

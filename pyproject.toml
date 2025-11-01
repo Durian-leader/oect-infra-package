@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oect-infra"
-version = "1.0.4"
+version = "1.0.7"
 description = "OECT (Organic Electrochemical Transistor) data processing infrastructure for experiment management, feature engineering, and analysis"
 readme = "README.md"
 requires-python = ">=3.11"

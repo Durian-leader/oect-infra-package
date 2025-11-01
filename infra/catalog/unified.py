@@ -1704,7 +1704,7 @@ class UnifiedExperimentManager:
             Dict[str, Any]: 清理结果统计
         """
         try:
-            from csv2hdf import batch_clean_json_files
+            from ..csv2hdf import batch_clean_json_files
             
             # 转换路径类型
             directory_str = str(source_directory)
@@ -1780,7 +1780,7 @@ class UnifiedExperimentManager:
             Dict[str, Any]: 转换结果统计
         """
         try:
-            from csv2hdf import process_folders_parallel
+            from ..csv2hdf import process_folders_parallel
             
             output_dir = str(self.catalog.config.get_absolute_path('raw_data'))
             
@@ -2263,7 +2263,7 @@ class UnifiedExperimentManager:
         try:
             # 1. 转换CSV/JSON到HDF5 - 需要确保导入路径正确
             try:
-                from csv2hdf.direct_csv2hdf import direct_convert_csvjson_to_hdf5
+                from ..csv2hdf.direct_csv2hdf import direct_convert_csvjson_to_hdf5
             except ImportError:
                 logger.error("Cannot import direct_convert_csvjson_to_hdf5")
                 return None
@@ -2455,8 +2455,34 @@ def _extract_v2_wrapper(
     # 解析配置
     if isinstance(feature_config, str):
         from infra.features_v2.config.parser import ConfigParser
-        features = FeatureSet.from_config(feature_config, experiment=experiment)
-        config_name = Path(feature_config).stem
+
+        # 检查是否为完整路径
+        config_path = Path(feature_config)
+        is_valid_config_file = (
+            config_path.suffix in ['.yaml', '.yml'] and
+            config_path.exists() and
+            config_path.is_file()
+        )
+
+        if not is_valid_config_file:
+            # 尝试从多个位置查找配置文件
+            # 1. catalog/feature_configs
+            catalog_config_path = Path(__file__).parent / 'feature_configs' / f'{feature_config}.yaml'
+            if catalog_config_path.exists():
+                config_path = catalog_config_path
+            else:
+                # 2. features_v2/config/templates
+                template_path = Path(__file__).parent.parent / 'features_v2' / 'config' / 'templates' / f'{feature_config}.yaml'
+                if template_path.exists():
+                    config_path = template_path
+                else:
+                    raise ValueError(
+                        f"配置文件不存在: {feature_config}, "
+                        f"也未在 catalog/feature_configs 或 features_v2/config/templates 中找到"
+                    )
+
+        config_name = config_path.stem
+        features = FeatureSet.from_config(str(config_path), experiment=experiment)
     else:
         config_name = 'inline_config'
         features = FeatureSet(experiment=experiment)

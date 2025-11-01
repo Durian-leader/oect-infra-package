@@ -13,10 +13,10 @@ from enum import Enum
 
 # 新的直接转换模块
 try:
-    from csv2hdf.direct_csv2hdf import direct_csv_to_new_hdf5
+    from .direct_csv2hdf import direct_csv_to_new_hdf5
 except ImportError:
     # 当作为独立脚本运行时的备用导入
-    from direct_csv2hdf import direct_csv_to_new_hdf5
+    from infra.csv2hdf.direct_csv2hdf import direct_csv_to_new_hdf5
 
 # =========================
 # 数据结构
