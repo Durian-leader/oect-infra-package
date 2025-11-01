@@ -485,14 +485,9 @@ class UnifiedExperiment:
             logger.warning(f"V2 特征目录不存在: {features_v2_dir}")
             return {'error': 'Directory not found'}
 
-        # 新格式：包含配置名
-        pattern = f"{self.chip_id}-{self.device_id}-v2_*-feat_*.parquet"
+        # 标准格式：包含配置名
+        pattern = f"{self.chip_id}-{self.device_id}-*-feat_*.parquet"
         found_files = list(features_v2_dir.glob(pattern))
-
-        # 旧格式：不包含配置名（兼容）
-        old_pattern = f"{self.chip_id}-{self.device_id}-v2_features-feat_*.parquet"
-        old_files = list(features_v2_dir.glob(old_pattern))
-        found_files.extend(old_files)
 
         # 去重
         found_files = list(set(found_files))
@@ -2507,7 +2502,7 @@ def _extract_v2_wrapper(
         config_hash = md5(config_name.encode()).hexdigest()[:8]
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
         filename = (
-            f"{chip_id}-{device_id}-v2_features-"
+            f"{chip_id}-{device_id}-{config_name}-"
             f"feat_{timestamp}_{config_hash}.parquet"
         )
         output_path = str(Path(output_dir) / filename)

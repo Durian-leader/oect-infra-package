@@ -304,8 +304,8 @@ class FileScanner:
                     result.raw_files.append(file_path)
                 elif self._match_pattern(filename, self.config.discovery.file_patterns.get('features', '*-feat_*.h5')):
                     result.feature_files.append(file_path)
-                elif filename.endswith('-v2_features-feat_.parquet') or '-v2_features-' in filename:
-                    # V2 Parquet 文件（暂不处理，元数据已在数据库中）
+                elif filename.endswith('.parquet') and '-feat_' in filename:
+                    # V2 Parquet 特征文件（暂不处理，元数据已在数据库中）
                     logger.debug(f"发现 V2 特征文件（跳过扫描）: {filename}")
                     pass
                 else:
@@ -347,7 +347,7 @@ class FileScanner:
             patterns = [
                 self.config.discovery.file_patterns.get('raw', '*-test_*.h5'),
                 self.config.discovery.file_patterns.get('features', '*-feat_*.h5'),
-                '*-v2_features-*.parquet',  # V2 特征文件
+                '*-feat_*.parquet',  # V2 特征文件（Parquet格式）
             ]
             
             # 递归扫描文件
