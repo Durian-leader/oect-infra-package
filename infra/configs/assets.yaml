@@ -1,0 +1,115 @@
+profile: default
+assets:
+  - id: transient_all
+    scope: per_device
+    generator: plotter_image
+    output: "images/{chip_safe}/device_{device_id}/transient_all.png"
+    params:
+      filename: "images/{chip_safe}/device_{device_id}/transient_all.png"
+      method: plot_transient_all
+      method_params:
+        figsize: [10, 6]
+  - id: transfer_evolution_linear
+    scope: per_device
+    generator: plotter_image
+    output: "images/{chip_safe}/device_{device_id}/transfer_linear.png"
+    params:
+      filename: "images/{chip_safe}/device_{device_id}/transfer_linear.png"
+      method: plot_transfer_evolution
+      method_params:
+        figsize: [10, 6]
+        log_scale: false
+  - id: transfer_evolution_log
+    scope: per_device
+    generator: plotter_image
+    output: "images/{chip_safe}/device_{device_id}/transfer_log.png"
+    params:
+      filename: "images/{chip_safe}/device_{device_id}/transfer_log.png"
+      method: plot_transfer_evolution
+      method_params:
+        figsize: [10, 6]
+        log_scale: true
+  - id: transient_early
+    scope: per_device
+    generator: plotter_image
+    output: "images/{chip_safe}/device_{device_id}/transient_early.png"
+    params:
+      filename: "images/{chip_safe}/device_{device_id}/transient_early.png"
+      method: plot_transient_single
+      method_params:
+        step_index: 1
+        time_range: [5, 6]
+        figsize: [10, 6]
+  - id: transient_late
+    scope: per_device
+    generator: plotter_image
+    output: "images/{chip_safe}/device_{device_id}/transient_late.png"
+    params:
+      filename: "images/{chip_safe}/device_{device_id}/transient_late.png"
+      method: plot_transient_single
+      method_params:
+        step_index: 999
+        time_range: [5, 6]
+        figsize: [10, 6]
+  - id: transfer_video
+    scope: per_device
+    generator: plotter_video
+    output: "videos/{chip_safe}/device_{device_id}/transfer.mp4"
+    params:
+      filename: "videos/{chip_safe}/device_{device_id}/transfer.mp4"
+      method: create_transfer_video_parallel
+      fps: 30
+      figsize: [10, 6]
+      verbose: false
+  - id: absI_max_raw
+    scope: feature_variants
+    generator: feature_plot
+    output: "features/{chip_safe}/absI_max_raw_{variant}.png"
+    params:
+      feature: absI_max_raw
+      figsize: [12, 8]
+      variants:
+        - variant: raw
+          skip_points: 0
+          normalize_to_first: false
+        - variant: skip1
+          skip_points: 1
+          normalize_to_first: false
+        - variant: skip5
+          skip_points: 5
+          normalize_to_first: false
+        - variant: normalized
+          skip_points: 0
+          normalize_to_first: true
+        - variant: skip1_normalized
+          skip_points: 1
+          normalize_to_first: true
+        - variant: skip5_normalized
+          skip_points: 5
+          normalize_to_first: true
+  - id: absgm_max_forward
+    scope: feature_variants
+    generator: feature_plot
+    output: "features/{chip_safe}/absgm_max_forward_{variant}.png"
+    params:
+      feature: absgm_max_forward
+      figsize: [12, 8]
+      variants:
+        - variant: raw
+          skip_points: 0
+          normalize_to_first: false
+        - variant: skip1
+          skip_points: 1
+          normalize_to_first: false
+        - variant: skip5
+          skip_points: 5
+          normalize_to_first: false
+        - variant: normalized
+          skip_points: 0
+          normalize_to_first: true
+        - variant: skip1_normalized
+          skip_points: 1
+          normalize_to_first: true
+        - variant: skip5_normalized
+          skip_points: 5
+          normalize_to_first: true

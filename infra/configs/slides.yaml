@@ -1,0 +1,95 @@
+slides:
+  - id: chip_transient_overview
+    builder: image_grid
+    scope:
+      foreach: chip
+      chips: ["*"]
+    params:
+      title: "Transient Response - {chip_id}"
+      asset_id: transient_all
+      device_ids: ["1", "2", "3", "4", "5", "6"]
+      columns: 3
+      caption_template: "Device {device_id}"
+      fallback_text: "Missing image"
+  - id: chip_transfer_linear
+    builder: image_grid
+    scope:
+      foreach: chip
+      chips: ["*"]
+    params:
+      title: "Transfer Evolution (Linear) - {chip_id}"
+      asset_id: transfer_evolution_linear
+      device_ids: ["1", "2", "3", "4", "5", "6"]
+      columns: 3
+      caption_template: "Device {device_id}"
+      fallback_text: "Missing image"
+  - id: chip_transfer_log
+    builder: image_grid
+    scope:
+      foreach: chip
+      chips: ["*"]
+    params:
+      title: "Transfer Evolution (Log) - {chip_id}"
+      asset_id: transfer_evolution_log
+      device_ids: ["1", "2", "3", "4", "5", "6"]
+      columns: 3
+  - id: chip_transient_early
+    builder: image_grid
+    params:
+      title: "Early Transient - {chip_id}"
+      asset_id: transient_early
+      device_ids: ["1", "2", "3", "4", "5", "6"]
+      columns: 3
+  - id: chip_transient_late
+    builder: image_grid
+    params:
+      title: "Late Transient - {chip_id}"
+      asset_id: transient_late
+      device_ids: ["1", "2", "3", "4", "5", "6"]
+      columns: 3
+  - id: chip_transfer_videos
+    builder: video_grid
+    params:
+      title: "Transfer Evolution Videos - {chip_id}"
+      asset_id: transfer_video
+      device_ids: ["1", "2", "3", "4", "5", "6"]
+      columns: 3
+      fallback_text: "Missing video"
+  - id: chip_feature_absI
+    builder: feature_matrix
+    params:
+      title: "absI_max_raw - {chip_id}"
+      asset_id: absI_max_raw
+      columns: 3
+      variants:
+        - variant: raw
+          title: "Raw"
+        - variant: skip1
+          title: "Skip 1"
+        - variant: skip5
+          title: "Skip 5"
+        - variant: normalized
+          title: "Normalized"
+        - variant: skip1_normalized
+          title: "Skip1 + Norm"
+        - variant: skip5_normalized
+          title: "Skip5 + Norm"
+  - id: chip_feature_absgm
+    builder: feature_matrix
+    params:
+      title: "absgm_max_forward - {chip_id}"
+      asset_id: absgm_max_forward
+      columns: 3
+      variants:
+        - variant: raw
+          title: "Raw"
+        - variant: skip1
+          title: "Skip 1"
+        - variant: skip5
+          title: "Skip 5"
+        - variant: normalized
+          title: "Normalized"
+        - variant: skip1_normalized
+          title: "Skip1 + Norm"
+        - variant: skip5_normalized
+          title: "Skip5 + Norm"

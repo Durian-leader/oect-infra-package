@@ -1,0 +1,99 @@
+# ============================================================================
+# Features V2 配置模板 - 混合 Transfer + Transient 特征
+# ============================================================================
+#
+# 此模板演示如何同时提取 Transfer 和 Transient 特征
+#
+# ============================================================================
+
+version: v2
+data_type: both
+description: "混合 Transfer 和 Transient 特征"
+
+# 数据源配置
+data_source:
+  experiment_type: both
+  load_mode: batch
+
+# 特征定义
+features:
+  # ========== Transfer 特征 ==========
+
+  - name: gm_max_forward
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: S
+
+  - name: Von_forward
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: V
+
+  - name: absI_max
+    extractor: transfer.absI_max
+    input: transfer
+    params:
+      device_type: N
+    unit: A
+
+  # ========== Transient 特征 ==========
+
+  - name: transient_peak
+    extractor: transient.peak_current
+    input: transient
+    params:
+      use_abs: true
+    description: "Transient 峰值电流"
+    unit: A
+
+  - name: transient_decay
+    extractor: transient.decay_time
+    input: transient
+    params:
+      method: exponential
+      fit_range: [0.1, 0.9]
+    description: "Transient 衰减时间常数"
+    unit: s
+
+  # 可选：提取 cycles（数据量较大）
+  # - name: transient_cycles
+  #   extractor: transient.cycles
+  #   input: transient
+  #   params:
+  #     n_cycles: 50
+  #     method: peak_detection
+  #   description: "Transient 50个周期峰值"
+  #   unit: A
+  #   output_shape: [n_steps, 50]
+
+  # ========== 跨模态派生特征（Transfer + Transient） ==========
+
+  # 示例 1: 跨导与峰值电流的比率
+  - name: gm_to_peak_ratio
+    func: "lambda inputs: inputs['gm_max_forward'] / inputs['transient_peak']"
+    input:
+      - gm_max_forward
+      - transient_peak
+    output_shape: [n_steps]
+    description: "跨导与峰值电流的比率"
+    unit: ""
+
+  # 示例 2: 归一化衰减时间
+  - name: decay_normalized
+    func: "lambda decay: (decay - decay.mean()) / decay.std()"
+    input: transient_decay
+    output_shape: [n_steps]
+    description: "归一化的衰减时间"
+    unit: ""
+
+# 版本化配置
+versioning:
+  auto_create: true
+  expand_multidim: true
+  version_name: v2_mixed

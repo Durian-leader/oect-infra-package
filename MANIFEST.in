@@ -1,0 +1,44 @@
+# Include documentation files
+include README.md
+include LICENSE
+include PUBLISHING.md
+
+# Include CLAUDE.md documentation files
+recursive-include infra *.md
+
+# Include YAML configuration files
+recursive-include infra *.yaml
+recursive-include infra *.yml
+
+# Include specific configuration directories
+include infra/configs/*.yaml
+include infra/catalog/feature_configs/*.yaml
+include infra/features_v2/config/templates/*.yaml
+
+# Include example catalog config
+include infra/catalog/example/catalog_config.yaml
+include infra/catalog_config.yaml
+
+# Exclude temporary and build files
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *$py.class
+global-exclude *.so
+global-exclude .DS_Store
+
+# Exclude build and log directories
+prune infra/build
+prune infra/logs
+prune infra/prompt
+prune infra/extern_link
+prune infra/infra
+
+# Exclude notebook checkpoints
+global-exclude .ipynb_checkpoints
+prune **/.ipynb_checkpoints
+
+# Exclude IDE and version control files
+global-exclude .vscode
+global-exclude .claude
+global-exclude .git
+global-exclude .gitignore

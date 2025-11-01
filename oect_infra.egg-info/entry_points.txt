@@ -1,0 +1,3 @@
+[console_scripts]
+catalog = infra.catalog.cli:main
+stability-report = infra.stability_report.reporting.cli:main

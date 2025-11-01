@@ -1,0 +1,30 @@
+roots:
+  raw_data: data/raw
+  features: features
+database:
+  path: data/catalog.db
+  auto_backup: false
+  backup_interval: 86400
+  connection_pool_size: 10
+sync:
+  auto_sync: false
+  auto_sync_interval: 3600
+  conflict_strategy: timestamp
+  batch_size: 100
+  timeout: 300
+discovery:
+  recursive: true
+  max_depth: 10
+  parallel_workers: 4
+  file_patterns:
+    raw: '*-test_*.h5'
+    features: '*-feat_*.h5'
+  ignore_patterns:
+  - '*.tmp'
+  - .*
+  - _*
+logging:
+  level: INFO
+  file: logs/catalog.log
+  rotation: 1 week
+  retention: 4 weeks

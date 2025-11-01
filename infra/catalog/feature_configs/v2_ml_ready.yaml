@@ -1,0 +1,117 @@
+# ============================================================================
+# Catalog 集成 - V2 ML 就绪特征配置
+# ============================================================================
+#
+# 包含完整的 Transfer 特征，适合机器学习训练
+#
+# ============================================================================
+
+version: v2
+data_type: transfer
+description: "ML 就绪的完整 Transfer 特征集"
+
+data_source:
+  experiment_type: transfer
+  load_mode: batch
+
+features:
+  # 原始数值特征
+  - name: gm_max_forward
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: S
+
+  - name: gm_max_reverse
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: reverse
+      device_type: N
+    unit: S
+
+  - name: Von_forward
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: V
+
+  - name: Von_reverse
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: reverse
+      device_type: N
+    unit: V
+
+  - name: absI_max
+    extractor: transfer.absI_max
+    input: transfer
+    params:
+      device_type: N
+    unit: A
+
+  # 坐标特征（用于 ML）
+  - name: gm_max_forward_Vg
+    extractor: transfer.gm_max_coords
+    input: transfer
+    params:
+      direction: forward
+      return_vg_only: true
+    unit: V
+
+  - name: gm_max_forward_Id
+    extractor: transfer.gm_max_coords
+    input: transfer
+    params:
+      direction: forward
+      return_id_only: true
+    unit: A
+
+  - name: Von_forward_Vg
+    extractor: transfer.Von_coords
+    input: transfer
+    params:
+      direction: forward
+      return_vg_only: true
+    unit: V
+
+  - name: Von_forward_Id
+    extractor: transfer.Von_coords
+    input: transfer
+    params:
+      direction: forward
+      return_id_only: true
+    unit: A
+
+  # 派生特征（特征工程）
+  - name: gm_ratio
+    func: "lambda inputs: inputs['gm_max_forward'] / inputs['gm_max_reverse']"
+    input:
+      - gm_max_forward
+      - gm_max_reverse
+    output_shape: [n_steps]
+    description: "正反向跨导比率"
+
+  - name: Von_diff
+    func: "lambda inputs: inputs['Von_forward'] - inputs['Von_reverse']"
+    input:
+      - Von_forward
+      - Von_reverse
+    output_shape: [n_steps]
+    description: "正反向 Von 差值"
+    unit: V
+
+  # 归一化特征（for ML）
+  - name: gm_max_forward_norm
+    func: "lambda gm: (gm - gm.mean()) / gm.std()"
+    input: gm_max_forward
+    output_shape: [n_steps]
+
+versioning:
+  auto_create: false
+  expand_multidim: true

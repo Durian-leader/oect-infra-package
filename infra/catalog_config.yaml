@@ -1,0 +1,210 @@
+# =============================================================================
+# Catalog配置文件 - OECT HDF5文件元信息管理和双向同步系统
+# =============================================================================
+# 
+# 这个文件包含catalog系统的完整配置。修改此文件后，重新启动catalog服务以使配置生效。
+# 
+# 配置说明：
+# - 所有路径都是相对于此配置文件所在目录的相对路径
+# - 支持环境变量替换，格式: ${ENV_VAR_NAME}
+# - 修改路径配置后建议重新扫描文件
+# 
+# 生成时间: 自动生成
+# 版本: 1.0.0
+# =============================================================================
+
+# 根目录配置
+# 定义各类数据文件的根目录位置
+roots:
+  # 原始数据文件目录 (HDF5格式的实验数据)
+  raw_data: "/home/lidonghaowsl/develop_win/hdd/data/Stability_PS20250929/raw"
+
+  # 特征数据文件目录 V1 (HDF5格式，从原始数据提取的特征)
+  features: "/home/lidonghaowsl/develop_win/hdd/data/Stability_PS20250929/features"
+
+  # 特征数据文件目录 V2 (Parquet格式，features_v2 系统提取的特征)
+  features_v2: "/home/lidonghaowsl/develop_win/hdd/data/Stability_PS20250929/features_v2"
+
+# 数据库配置
+# SQLite数据库相关设置
+database:
+  # 数据库文件路径
+  path: "/home/lidonghaowsl/develop_win/hdd/data/Stability_PS20250929/catalog.db"
+  
+  # 自动备份设置 (建议在生产环境中启用)
+  auto_backup: false
+  
+  # 备份间隔(秒) - 仅在auto_backup=true时生效
+  # 86400 = 24小时
+  backup_interval: 86400
+  
+  # 数据库连接池大小
+  connection_pool_size: 10
+
+# 同步配置
+# 文件系统和数据库之间的同步设置
+sync:
+  # 自动同步扫描 (推荐关闭，手动触发更可控)
+  auto_sync: false
+  
+  # 自动同步间隔(秒) - 仅在auto_sync=true时生效
+  # 3600 = 1小时
+  auto_sync_interval: 3600
+  
+  # 冲突解决策略
+  # - timestamp: 基于时间戳自动解决 (推荐)
+  # - manual: 手动解决冲突
+  # - ignore: 忽略冲突
+  conflict_strategy: "timestamp"
+  
+  # 批处理大小 - 一次处理的文件数量
+  batch_size: 100
+  
+  # 操作超时时间(秒)
+  timeout: 300
+
+# 文件发现配置
+# 文件扫描和自动发现的设置
+discovery:
+  # 是否递归扫描子目录
+  recursive: true
+  
+  # 最大扫描深度 (防止过深的目录结构)
+  max_depth: 10
+  
+  # 并行扫描工作进程数 (根据系统性能调整)
+  parallel_workers: 4
+  
+  # 文件匹配模式
+  file_patterns:
+    # 原始数据文件模式 (支持通配符)
+    raw: "*-test_*.h5"
+    
+    # 特征文件模式
+    features: "*-feat_*.h5"
+  
+  # 忽略的文件和目录模式
+  ignore_patterns:
+    - "*.tmp"          # 临时文件
+    - ".*"             # 隐藏文件
+    - "_*"             # 下划线开头的文件
+    - "*.bak"          # 备份文件
+    - "*.lock"         # 锁定文件
+
+# 日志配置
+# 系统日志记录设置
+logging:
+  # 日志级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # 日志文件路径
+  file: "/home/lidonghaowsl/develop_win/hdd/data/Stability_PS20250929/logs/catalog.log"
+  
+  # 日志轮转设置
+  # 支持的格式: "1 day", "1 week", "1 month", "100 MB"
+  rotation: "1 week"
+  
+  # 日志保留时间
+  retention: "4 weeks"
+
+# 性能配置 (可选)
+# 针对大规模数据集的性能优化设置
+performance:
+  # 文件缓存大小 (单位: MB)
+  file_cache_size: 256
+  
+  # 数据库查询缓存大小
+  query_cache_size: 1000
+  
+  # 并行处理的最大内存使用 (单位: MB)
+  max_memory_usage: 2048
+
+# 扩展配置 (可选)
+# 与其他模块的集成设置
+integration:
+  # experiment模块集成
+  experiment:
+    # 是否启用懒加载
+    lazy_loading: true
+    
+    # 缓存大小 (步骤数)
+    cache_size: 20
+  
+  # features模块集成  
+  features:
+    # 默认特征版本
+    default_version: "v1"
+    
+    # 是否自动创建特征文件
+    auto_create: false
+  
+  # visualization模块集成
+  visualization:
+    # 默认图像格式
+    default_format: "png"
+    
+    # 默认分辨率 (DPI)
+    default_dpi: 150
+
+# 监控和告警 (可选)
+# 系统状态监控设置
+monitoring:
+  # 是否启用监控
+  enabled: false
+  
+  # 监控间隔(秒)
+  interval: 300
+  
+  # 告警阈值
+  alerts:
+    # 同步冲突数量阈值
+    max_sync_conflicts: 10
+    
+    # 磁盘使用率阈值 (百分比)
+    disk_usage_threshold: 90
+    
+    # 处理失败率阈值 (百分比)  
+    failure_rate_threshold: 5
+
+# 安全配置 (可选)
+# 数据安全和访问控制
+security:
+  # 是否启用访问日志
+  access_logging: false
+  
+  # 数据库加密 (需要额外依赖)
+  database_encryption: false
+  
+  # 备份加密
+  backup_encryption: false
+
+# =============================================================================
+# 配置文件说明
+# =============================================================================
+#
+# 1. 路径配置:
+#    - 所有路径都相对于此配置文件所在目录
+#    - 可以使用绝对路径，但不推荐
+#    - 支持环境变量: ${HOME}, ${USER} 等
+#
+# 2. 同步策略:
+#    - timestamp: 推荐用于大多数场景
+#    - manual: 适合对数据一致性要求极高的场景  
+#    - ignore: 适合只读访问的场景
+#
+# 3. 性能调优:
+#    - parallel_workers: 根据CPU核心数设置，通常为核心数的1-2倍
+#    - batch_size: 内存较大时可以增加，提高处理效率
+#    - max_depth: 限制扫描深度，避免过深的目录结构影响性能
+#
+# 4. 文件模式:
+#    - 支持标准的glob模式: *, ?, [], {}
+#    - 可以根据实际文件命名规则调整
+#    - 建议保持与现有项目的命名约定一致
+#
+# 5. 日志管理:
+#    - INFO级别适合日常使用
+#    - DEBUG级别用于故障诊断，会产生大量日志
+#    - 注意日志文件的磁盘空间使用
+#
+# =============================================================================

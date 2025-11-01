@@ -1,0 +1,61 @@
+# ============================================================================
+# Features V2 配置模板 - Transient Cycles 特征
+# ============================================================================
+#
+# 此模板演示如何提取 Transient 数据的 Cycle 特征
+#
+# 注意：需要实现 Transient 提取器后才能使用
+#
+# ============================================================================
+
+version: v2
+data_type: transient
+description: "Transient Cycles 特征提取配置"
+
+# 数据源配置
+data_source:
+  experiment_type: transient
+  load_mode: batch
+
+# 特征定义
+features:
+  # 1. 提取 100 个 cycle 的峰值电流
+  - name: transient_cycles
+    extractor: transient.cycles
+    input: transient
+    params:
+      n_cycles: 100
+      method: peak_detection  # 峰值检测方法
+    description: "100 个 cycle 的峰值电流"
+    unit: A
+    output_shape: [n_steps, 100]
+
+  # 2. Cycle 平均值（聚合特征）
+  - name: cycle_mean
+    func: "lambda cycles: cycles.mean(axis=1)"
+    input: transient_cycles
+    output_shape: [n_steps]
+    description: "Cycle 电流平均值"
+    unit: A
+
+  # 3. Cycle 标准差（稳定性指标）
+  - name: cycle_std
+    func: "lambda cycles: cycles.std(axis=1)"
+    input: transient_cycles
+    output_shape: [n_steps]
+    description: "Cycle 电流标准差"
+    unit: A
+
+  # 4. Cycle 衰减率（第 1 个 vs 最后一个）
+  - name: cycle_decay_rate
+    func: "lambda cycles: (cycles[:, 0] - cycles[:, -1]) / cycles[:, 0]"
+    input: transient_cycles
+    output_shape: [n_steps]
+    description: "Cycle 衰减率"
+    unit: ""
+
+# 版本化配置
+versioning:
+  auto_create: true
+  expand_multidim: false  # 不展开（保持 100 维）
+  version_name: v2_transient_cycles

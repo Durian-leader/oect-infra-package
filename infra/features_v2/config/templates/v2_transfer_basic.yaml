@@ -1,0 +1,107 @@
+# ============================================================================
+# Features V2 配置模板 - 基础 Transfer 特征
+# ============================================================================
+#
+# 此模板演示如何使用配置文件定义 Transfer 特征提取流程
+#
+# 使用方法：
+#   from infra.features_v2 import FeatureSet
+#   features = FeatureSet.from_config('v2_transfer_basic.yaml', experiment=exp)
+#   result = features.compute()
+#
+# ============================================================================
+
+version: v2
+data_type: transfer
+description: "基础 Transfer 特征提取配置"
+
+# 数据源配置
+data_source:
+  experiment_type: transfer
+  load_mode: batch  # 批量加载（推荐）
+
+# 特征定义
+features:
+  # 1. 最大跨导（正向扫描）
+  - name: gm_max_forward
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    description: "正向扫描最大跨导"
+    unit: S
+
+  # 2. 最大跨导（反向扫描）
+  - name: gm_max_reverse
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: reverse
+      device_type: N
+    description: "反向扫描最大跨导"
+    unit: S
+
+  # 3. 开启电压（正向）
+  - name: Von_forward
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    description: "正向扫描开启电压"
+    unit: V
+
+  # 4. 开启电压（反向）
+  - name: Von_reverse
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: reverse
+      device_type: N
+    description: "反向扫描开启电压"
+    unit: V
+
+  # 5. 最大电流绝对值
+  - name: absI_max
+    extractor: transfer.absI_max
+    input: transfer
+    params:
+      device_type: N
+    description: "最大漏极电流绝对值"
+    unit: A
+
+  # 6. 派生特征：归一化跨导
+  - name: gm_max_forward_normalized
+    func: "lambda gm: (gm - gm.mean()) / gm.std()"
+    input: gm_max_forward
+    output_shape: [n_steps]
+    description: "归一化的正向跨导"
+    unit: ""
+
+  # 7. 派生特征：跨导比率
+  - name: gm_ratio
+    func: "lambda inputs: inputs['forward'] / inputs['reverse']"
+    input:
+      - gm_max_forward
+      - gm_max_reverse
+    output_shape: [n_steps]
+    description: "正向与反向跨导的比率"
+    unit: ""
+
+# 版本化配置（可选）
+versioning:
+  auto_create: true
+  expand_multidim: true
+  selected_features: null  # null 表示全部特征
+  version_name: v2_transfer_basic
+
+# 高级配置（可选）
+# advanced:
+#   caching:
+#     enabled: true
+#     backend: memory
+#     memory_size_mb: 512
+#   parallel:
+#     enabled: false
+#     n_workers: 4

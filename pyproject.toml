@@ -1,0 +1,93 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "oect-infra"
+version = "1.0.0"
+description = "OECT (Organic Electrochemical Transistor) data processing infrastructure for experiment management, feature engineering, and analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "lidonghao", email = "lidonghao100@outlook.com"}
+]
+keywords = [
+    "OECT",
+    "data-processing",
+    "scientific-computing",
+    "hdf5",
+    "feature-engineering",
+    "experiment-management",
+    "materials-science",
+    "electrochemistry"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+dependencies = [
+    "h5py>=3.8.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "matplotlib>=3.7.0",
+    "pydantic>=2.0.0",
+    "scipy>=1.10.0",
+    "scikit-learn>=1.3.0",
+    "PyYAML>=6.0",
+    "Pillow>=10.0.0",
+    "tabulate>=0.9.0",
+    "python-pptx>=0.6.21",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing"
+Documentation = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/blob/main/CLAUDE.md"
+Repository = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing"
+Issues = "https://github.com/lidonghaowsl/Minitest-OECT-dataprocessing/issues"
+
+[project.scripts]
+catalog = "infra.catalog.cli:main"
+stability-report = "infra.stability_report.reporting.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["infra*"]
+exclude = [
+    "infra.build*",
+    "infra.logs*",
+    "infra.prompt*",
+    "infra.extern_link*",
+    "infra.infra*",
+]
+
+[tool.setuptools.package-data]
+infra = [
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.md",
+    "configs/*.yaml",
+    "catalog/feature_configs/*.yaml",
+    "features_v2/config/templates/*.yaml",
+]

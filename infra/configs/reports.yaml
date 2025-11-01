@@ -1,0 +1,22 @@
+reports:
+  - id: chip_overview
+    title: "OECT Stability Overview"
+    slides:
+      - slide_id: chip_transient_overview
+        params:
+          title: "Transient Response - {chip_id}"
+        chips: ["*"]
+      - slide_id: chip_transfer_linear
+        chips: ["*"]
+      - slide_id: chip_transfer_log
+        chips: ["*"]
+      - slide_id: chip_transfer_videos
+        chips: ["*"]
+      - slide_id: chip_transient_early
+        chips: ["*"]
+      - slide_id: chip_transient_late
+        chips: ["*"]
+      - slide_id: chip_feature_absI
+        chips: ["*"]
+      - slide_id: chip_feature_absgm
+        chips: ["*"]

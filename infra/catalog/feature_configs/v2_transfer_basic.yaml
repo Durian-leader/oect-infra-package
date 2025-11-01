@@ -1,0 +1,69 @@
+# ============================================================================
+# Catalog 集成 - V2 Transfer 基础特征配置
+# ============================================================================
+#
+# 此配置通过 catalog 管理器使用：
+#   manager = UnifiedExperimentManager()
+#   exp = manager.get_experiment(chip_id="...", device_id="...")
+#   result = exp.extract_features_v2('v2_transfer_basic')
+#
+# 或批量处理：
+#   experiments = manager.search(chip_id="...")
+#   manager.batch_extract_features_v2(experiments, 'v2_transfer_basic')
+#
+# ============================================================================
+
+version: v2
+data_type: transfer
+description: "基础 Transfer 特征（catalog 集成版）"
+
+data_source:
+  experiment_type: transfer
+  load_mode: batch
+
+features:
+  # 跨导特征
+  - name: gm_max_forward
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: S
+
+  - name: gm_max_reverse
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: reverse
+      device_type: N
+    unit: S
+
+  # 开启电压
+  - name: Von_forward
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: V
+
+  - name: Von_reverse
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: reverse
+      device_type: N
+    unit: V
+
+  # 最大电流
+  - name: absI_max
+    extractor: transfer.absI_max
+    input: transfer
+    params:
+      device_type: N
+    unit: A
+
+versioning:
+  auto_create: false  # catalog 环境下不创建 HDF5 版本矩阵
+  expand_multidim: true

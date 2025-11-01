@@ -1,0 +1,44 @@
+# ============================================================================
+# Catalog 集成 - V2 快速分析特征配置
+# ============================================================================
+#
+# 精简的特征集，用于快速数据探索和质量检查
+#
+# ============================================================================
+
+version: v2
+data_type: transfer
+description: "快速分析的精简特征集"
+
+data_source:
+  experiment_type: transfer
+  load_mode: batch
+
+features:
+  # 核心特征（最常用的 3 个）
+  - name: gm_max_forward
+    extractor: transfer.gm_max
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: S
+
+  - name: Von_forward
+    extractor: transfer.Von
+    input: transfer
+    params:
+      direction: forward
+      device_type: N
+    unit: V
+
+  - name: absI_max
+    extractor: transfer.absI_max
+    input: transfer
+    params:
+      device_type: N
+    unit: A
+
+versioning:
+  auto_create: false
+  expand_multidim: true
