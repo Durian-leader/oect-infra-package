@@ -7,13 +7,16 @@
 - 性能监控
 """
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
 import time
 import numpy as np
 from pathlib import Path
 
 from infra.features_v2.core.compute_graph import ComputeGraph, ComputeNode
 from infra.logger_config import get_module_logger
+
+if TYPE_CHECKING:
+    from infra.catalog.unified_experiment import UnifiedExperiment
 
 logger = get_module_logger()
 
@@ -96,6 +99,11 @@ class Executor:
         self.data_loaders = data_loaders or {}
         self.extractor_registry = extractor_registry or {}
 
+        # Context injection attributes (set by FeatureSet)
+        self.unified_experiment: Optional['UnifiedExperiment'] = None
+        self.config_name: Optional[str] = None
+        self.config_version: Optional[str] = None
+
     def execute(self, initial_context: Optional[ExecutionContext] = None) -> ExecutionContext:
         """执行计算图
 
@@ -155,9 +163,25 @@ class Executor:
         # 解析输入
         inputs = self._resolve_inputs(node, context)
 
-        # 执行计算
+        # 执行计算（注入 extraction context 如果可用）
         start = time.perf_counter()
-        result = self._compute_node(node, inputs)
+
+        # 检查是否需要注入上下文
+        if self.unified_experiment is not None:
+            # 导入 execution_context（延迟导入避免循环依赖）
+            from infra.features_v2.core.context import execution_context
+
+            # 使用上下文管理器包裹计算
+            with execution_context(
+                unified_experiment=self.unified_experiment,
+                config_name=self.config_name,
+                config_version=self.config_version
+            ):
+                result = self._compute_node(node, inputs)
+        else:
+            # 无上下文，直接计算
+            result = self._compute_node(node, inputs)
+
         elapsed = (time.perf_counter() - start) * 1000
 
         # 存储结果

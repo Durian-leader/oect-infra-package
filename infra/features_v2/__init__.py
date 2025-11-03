@@ -27,5 +27,5 @@ features_v2 - 现代化特征工程系统
 from infra.features_v2.core.feature_set import FeatureSet
 from infra.features_v2.extractors.base import BaseExtractor, register
 
-__version__ = '2.0.1'
+__version__ = '2.1.0'
 __all__ = ['FeatureSet', 'BaseExtractor', 'register']

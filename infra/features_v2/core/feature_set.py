@@ -412,6 +412,11 @@ class FeatureSet:
             extractor_registry=extractor_instances,
         )
 
+        # 注入上下文信息（供 extractors 访问）
+        executor.unified_experiment = self.unified_experiment
+        executor.config_name = self.config_name
+        executor.config_version = self.config_version
+
         context = executor.execute(initial_context=initial_context)
         self._computed_results = context
 

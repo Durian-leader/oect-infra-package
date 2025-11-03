@@ -85,6 +85,88 @@
 - `register(name: str)`：装饰器，将提取器类注册为给定名称（建议 `category.name`）。
 - `infra.features_v2.extractors.get_extractor(name, params)`：按名实例化（供内部使用，也可外部手动使用）。
 
+### ✨ Context Access（上下文访问）**新功能 v2.1.0**
+
+特征提取器可以透明访问实验元数据和 workflow 参数，**无需手动配置**。
+
+#### 核心 API
+- `get_current_context() -> Optional[ExtractionContext]`
+  - 获取当前执行上下文（特征提取期间可用）
+  - 返回 `None` 如果在提取外调用
+- `require_context() -> ExtractionContext`
+  - 获取上下文或抛出异常（用于强制要求上下文的 extractor）
+- `has_context() -> bool`
+  - 检查上下文是否可用
+
+#### ExtractionContext 属性
+- `chip_id: str` - 芯片 ID（如 `'#20250804008'`）
+- `device_id: str` - 器件 ID（如 `'3'`）
+- `config_name: Optional[str]` - 特征配置名称
+- `config_version: Optional[str]` - 配置版本
+- `workflow: Dict[str, Any]` - 扁平化的 workflow 元数据
+- `get_workflow_param(param_path, default=None)` - 安全访问 workflow 参数
+- `has_workflow_param(param_path) -> bool` - 检查参数是否存在
+- `unified_experiment` - UnifiedExperiment 实例
+
+#### 使用示例
+```python
+from infra.features_v2.extractors.base import BaseExtractor, register
+from infra.features_v2.core.context import get_current_context
+
+@register('my_feature.smart_charge')
+class SmartChargeExtractor(BaseExtractor):
+    def extract(self, data, params):
+        # ✅ 直接访问上下文（零配置）
+        ctx = get_current_context()
+
+        if ctx:
+            # 访问 workflow 参数
+            sampling_rate = ctx.get_workflow_param(
+                'workflow_step_1_1_param_sampling_rate',
+                default=1000
+            )
+
+            # 访问实验元数据
+            chip_id = ctx.chip_id
+            device_id = ctx.device_id
+
+            print(f"处理 {chip_id} Device {device_id}, 采样率={sampling_rate}Hz")
+        else:
+            # Fallback（无上下文时）
+            sampling_rate = params.get('fallback_sampling_rate', 1000)
+
+        # 使用 sampling_rate 计算特征...
+        transient_list = data
+        result = []
+        for step_data in transient_list:
+            time = step_data.get('continuous_time')
+            if time is None:
+                time = np.arange(len(step_data['drain_current'])) / sampling_rate
+            charge = np.trapz(step_data['drain_current'], time)
+            result.append(charge)
+
+        return np.array(result)
+
+    @property
+    def output_shape(self):
+        return ('n_steps',)
+```
+
+#### 最佳实践
+1. **始终检查上下文可用性**：使用 `if ctx:` 提供 fallback
+2. **使用 `get_workflow_param()` 安全访问**：避免 KeyError
+3. **提供默认值**：确保在无上下文时也能工作
+4. **需要 UnifiedExperiment**：上下文需要通过 `FeatureSet(unified_experiment=exp)` 设置
+
+#### 线程安全性
+- 使用 Python `contextvars` 实现，天然支持多线程/异步
+- 每个执行上下文自动隔离，无需担心并发问题
+
+#### 完整示例
+参见：`infra/features_v2/extractors/examples/context_usage_demo.py`
+- 4 个完整示例 extractor
+- 涵盖常见用例（采样率、归一化、元数据等）
+
 ## 内置提取器（已实现）
 
 以下名称均为可在 `FeatureSet.add(..., extractor=...)` 中使用的注册名：
