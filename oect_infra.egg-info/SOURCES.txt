@@ -82,6 +82,7 @@ pyproject.toml
 ./infra/features_v2/config/templates/v2_transient_cycles.yaml
 ./infra/features_v2/core/__init__.py
 ./infra/features_v2/core/compute_graph.py
+./infra/features_v2/core/context.py
 ./infra/features_v2/core/executor.py
 ./infra/features_v2/core/feature_set.py
 ./infra/features_v2/core/storage.py
@@ -97,6 +98,7 @@ pyproject.toml
 ./infra/features_v2/extractors/base.py
 ./infra/features_v2/extractors/transfer.py
 ./infra/features_v2/extractors/transient.py
+./infra/features_v2/extractors/examples/context_usage_demo.py
 ./infra/features_v2/performance/__init__.py
 ./infra/features_v2/performance/cache.py
 ./infra/features_v2/performance/parallel.py
@@ -211,6 +213,7 @@ infra/features_v2/config/templates/v2_transfer_basic.yaml
 infra/features_v2/config/templates/v2_transient_cycles.yaml
 infra/features_v2/core/__init__.py
 infra/features_v2/core/compute_graph.py
+infra/features_v2/core/context.py
 infra/features_v2/core/executor.py
 infra/features_v2/core/feature_set.py
 infra/features_v2/core/storage.py
@@ -226,6 +229,7 @@ infra/features_v2/extractors/__init__.py
 infra/features_v2/extractors/base.py
 infra/features_v2/extractors/transfer.py
 infra/features_v2/extractors/transient.py
+infra/features_v2/extractors/examples/context_usage_demo.py
 infra/features_v2/performance/__init__.py
 infra/features_v2/performance/cache.py
 infra/features_v2/performance/parallel.py
