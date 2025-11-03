@@ -1,0 +1,200 @@
+# ============================================================================
+# Catalog 集成 - Transient Tau 时间常数特征配置
+# ============================================================================
+#
+# AutoTau v0.3.0 特征提取配置
+#
+# 此配置通过 catalog 管理器使用：
+#   import autotau_extractors  # 导入以注册 extractor
+#   manager = UnifiedExperimentManager('catalog_config.yaml')
+#   experiments = manager.search()
+#
+#   # 96核并行处理（1-3分钟完成大规模数据）
+#   result = manager.batch_extract_features_v2(
+#       experiments=experiments,
+#       feature_config='transient_tau',
+#       n_workers=96,
+#       save_format='parquet',
+#       progress=True
+#   )
+#
+# 性能预期（75实验 × 5000步 × 100周期）:
+#   - v0.2.x: ~25 小时
+#   - v0.3.0: 1-3 分钟 ⚡⚡⚡（500-1500x 加速）
+#
+# ============================================================================
+
+version: v2
+data_type: transient
+description: "Transient Tau 时间常数特征提取（AutoTau v0.3.0 优化版）"
+
+# 数据源配置
+data_source:
+  experiment_type: transient
+  load_mode: batch
+
+# 特征定义
+features:
+  # ========== 核心特征：Tau On/Off 时间常数序列 ==========
+  - name: tau_cycles
+    extractor: transient.tau_on_off
+    input: transient
+    params:
+      # ===== 拟合质量控制 =====
+      r_squared_threshold: 0.99        # R² 阈值（提高精度）
+
+      # ===== 窗口搜索参数 =====
+      window_scalar_min: 0.1           # 窗口最小倍数（相对周期）
+      window_scalar_max: 0.375         # 窗口最大倍数（3/8）
+      window_points_step: 5            # 窗口点数搜索步长
+      window_start_idx_step: 1         # 窗口起始索引步长
+
+      # ===== 并行策略（重要！）=====
+      # 默认 use_parallel=False（推荐）
+      # - 让 features_v2 负责实验级并行（n_workers=96）
+      # - 避免嵌套并行，性能最优
+      #
+      # 可选 use_parallel=True（高级用法）
+      # - 启用窗口搜索并行（每实验内部并行）
+      # - 适合实验数少但步骤多的场景
+      # - 需要调整 n_workers 以平衡两级并行
+      use_parallel: false              # 默认 False，推荐
+      max_workers: 4                   # 窗口搜索并行核心数（仅 use_parallel=True 时生效）
+
+      # ===== 进度显示 =====
+      show_progress: false             # 关闭内部进度（由 batch_extract_features_v2 统一显示）
+
+      # ===== 可选参数（通常从 workflow 自动获取）=====
+      # period: 0.1                    # 周期（秒），如需覆盖 workflow
+      # sample_rate: 1000              # 采样率（Hz），如需覆盖 workflow
+
+    description: "Tau On/Off 时间常数序列（自动拟合 + 窗口缓存 + 智能搜索）"
+    unit: s
+    output_shape: [n_steps, n_cycles, 2]  # 最后一维: [tau_on, tau_off]
+
+  # ========== 派生特征：统计分析 ==========
+
+  # 1. 平均 Tau On（所有 cycles 的平均）
+  - name: tau_on_mean
+    func: "lambda tau_cycles: np.nanmean(tau_cycles[:, :, 0], axis=1)"
+    input: tau_cycles
+    output_shape: [n_steps]
+    description: "Tau On 平均值（所有 cycles）"
+    unit: s
+
+  # 2. 平均 Tau Off（所有 cycles 的平均）
+  - name: tau_off_mean
+    func: "lambda tau_cycles: np.nanmean(tau_cycles[:, :, 1], axis=1)"
+    input: tau_cycles
+    output_shape: [n_steps]
+    description: "Tau Off 平均值（所有 cycles）"
+    unit: s
+
+  # 3. Tau On 标准差（稳定性指标）
+  - name: tau_on_std
+    func: "lambda tau_cycles: np.nanstd(tau_cycles[:, :, 0], axis=1)"
+    input: tau_cycles
+    output_shape: [n_steps]
+    description: "Tau On 标准差（周期稳定性）"
+    unit: s
+
+  # 4. Tau Off 标准差（稳定性指标）
+  - name: tau_off_std
+    func: "lambda tau_cycles: np.nanstd(tau_cycles[:, :, 1], axis=1)"
+    input: tau_cycles
+    output_shape: [n_steps]
+    description: "Tau Off 标准差（周期稳定性）"
+    unit: s
+
+  # 5. Tau 比值（On/Off 响应对比）
+  - name: tau_on_off_ratio
+    func: "lambda tau_cycles: np.nanmean(tau_cycles[:, :, 0], axis=1) / (np.nanmean(tau_cycles[:, :, 1], axis=1) + 1e-10)"
+    input: tau_cycles
+    output_shape: [n_steps]
+    description: "Tau On/Off 比值（响应对称性）"
+    unit: ""
+
+  # 6. Cycle 演化趋势（首尾 10 个 cycle 的平均值变化）
+  - name: tau_on_evolution
+    func: "lambda tau_cycles: (np.nanmean(tau_cycles[:, :10, 0], axis=1) - np.nanmean(tau_cycles[:, -10:, 0], axis=1)) / (np.nanmean(tau_cycles[:, :10, 0], axis=1) + 1e-10)"
+    input: tau_cycles
+    output_shape: [n_steps]
+    description: "Tau On 演化趋势（首尾10周期变化率）"
+    unit: ""
+
+# 版本化配置
+versioning:
+  auto_create: false  # catalog 环境下不创建 HDF5 版本矩阵
+  expand_multidim: false  # 保持多维特征不展开（保留 n_cycles 维度）
+  version_name: transient_tau
+
+# ============================================================================
+# 使用说明
+# ============================================================================
+#
+# 基础用法（推荐，96核实验级并行）:
+# -----------------------------------------
+# import autotau_extractors
+# from infra.catalog import UnifiedExperimentManager
+#
+# manager = UnifiedExperimentManager('catalog_config20251101.yaml')
+# experiments = manager.search()  # 或按条件查询
+#
+# result = manager.batch_extract_features_v2(
+#     experiments=experiments,
+#     feature_config='transient_tau',
+#     n_workers=96,  # 充分利用 48-96 核
+#     save_format='parquet',
+#     force_recompute=False,  # 跳过已有特征的实验
+#     progress=True
+# )
+#
+# print(f"✓ 成功: {len(result['successful'])}")
+# print(f"✗ 失败: {len(result['failed'])}")
+#
+#
+# 单实验测试:
+# -----------------------------------------
+# exp = manager.get_experiment(chip_id="#20250804008", device_id="3")
+# df = exp.extract_features_v2('transient_tau', output_format='dataframe')
+# print(df.head())
+#
+#
+# 结果访问:
+# -----------------------------------------
+# # 从 Parquet 读取已计算的特征
+# df = exp.get_v2_feature_dataframe(config_name='transient_tau')
+#
+# # 访问多维特征
+# tau_cycles = df['tau_cycles'].values  # 或 exp.extract_features_v2()[''tau_cycles']
+# # shape: (n_steps, n_cycles, 2)
+#
+# # 访问统计特征
+# tau_on_mean = df['tau_on_mean']
+# tau_off_mean = df['tau_off_mean']
+# tau_ratio = df['tau_on_off_ratio']
+#
+#
+# 高级参数调优:
+# -----------------------------------------
+# 如需更严格的拟合或调整窗口范围，修改 params 中的参数：
+#   - r_squared_threshold: 0.99 → 0.995（更严格）
+#   - window_scalar_max: 0.375 → 0.5（更大窗口）
+#   - window_points_step: 5 → 3（更精细搜索，但更慢）
+#
+#
+# 性能优化建议:
+# -----------------------------------------
+# 1. 启用 Numba 加速:
+#    conda install numba  # 额外 2-5x 加速
+#
+# 2. 96核 CPU 推荐配置:
+#    n_workers=96, use_parallel=False  # 实验级并行（推荐）
+#
+# 3. 16核以下 CPU:
+#    n_workers=4, use_parallel=True, max_workers=4  # 两级并行
+#
+# 4. 缓存优化（独立脚本）:
+#    使用 CachedAutoTauFitter（参见 autotau 文档）
+#
+# ============================================================================
