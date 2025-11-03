@@ -69,13 +69,18 @@ class BaseExtractor(ABC):
     """特征提取器基类
 
     子类必须实现：
-    - extract(): 核心计算逻辑
+    - extract(): 批量计算逻辑（向后兼容，但不推荐）
+    - extract_single_step(): 单 step 计算逻辑（**推荐使用**，用于 step 级并行）
     - output_shape: 输出形状声明
 
     可选实现：
     - validate_inputs(): 输入验证
     - preprocess(): 预处理
     - postprocess(): 后处理
+
+    新架构说明：
+    - extract_single_step() 是核心方法，用于 StepLevelParallelExecutor
+    - extract() 可通过调用 extract_single_step() 实现（推荐）
     """
 
     def __init__(self, params: Dict[str, Any]):
@@ -87,7 +92,9 @@ class BaseExtractor(ABC):
 
     @abstractmethod
     def extract(self, data: Any, params: Dict[str, Any]) -> np.ndarray:
-        """提取特征（核心方法）
+        """提取特征 - 批量模式（向后兼容）
+
+        注意：此方法仅用于向后兼容，新代码应实现 extract_single_step()
 
         Args:
             data: 输入数据
@@ -103,14 +110,49 @@ class BaseExtractor(ABC):
         """
         pass
 
+    @abstractmethod
+    def extract_single_step(self, step_data: Any, params: Dict[str, Any]) -> Any:
+        """提取特征 - 单 step 模式（**推荐**）
+
+        这是 Step 级并行架构的核心方法
+
+        Args:
+            step_data: 单个 step 的输入数据
+                      - Transfer: {'Vg': array, 'Id': array}
+                      - Transient: {'continuous_time': array, 'drain_current': array, ...}
+            params: 运行时参数（通常与 self.params 相同）
+
+        Returns:
+            单 step 的特征值（类型取决于特征）：
+            - 标量：float/int
+            - 数组：np.ndarray (k,) 或 (k, m)
+            - None：表示提取失败（将填充 NaN）
+
+        示例：
+            # 标量特征（如 gm_max）
+            return 0.5
+
+            # 多维特征（如 cycles）
+            return np.array([0.1, 0.2, ..., 0.n])  # (n_cycles,)
+
+            # 失败
+            return None  # 或 np.nan
+        """
+        pass
+
     @property
     @abstractmethod
     def output_shape(self) -> Tuple:
-        """声明输出形状
+        """声明输出形状（每个 step 的输出）
 
         Returns:
-            形状元组，如 ('n_steps',) 或 ('n_steps', 100)
-            使用字符串 'n_steps' 表示动态维度
+            形状元组，如：
+            - () - 标量（如 gm_max）
+            - (100,) - 固定长度数组（如 cycles，100个周期）
+            - (2,) - 固定维度向量（如 Von_coords）
+            - ('n_cycles', 2) - 动态维度（如 tau_on_off）
+
+            注意：不需要包含 'n_steps' 维度（会自动聚合）
         """
         pass
 

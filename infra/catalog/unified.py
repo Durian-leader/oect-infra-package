@@ -1987,19 +1987,23 @@ class UnifiedExperimentManager:
         feature_config: Union[str, Dict],
         output_dir: Optional[str] = None,
         save_format: str = 'parquet',
-        n_workers: int = 1,
-        use_parallel_executor: bool = False,
+        execution_mode: str = 'experiment',
+        n_workers: int = 47,
         force_recompute: bool = False,
     ) -> Dict[str, Any]:
-        """批量使用 features_v2 提取特征
+        """批量使用 features_v2 提取特征（Step 级并行架构）
 
         Args:
             experiments: 实验列表或查询条件字符串
             feature_config: 特征配置（字符串或字典）
             output_dir: 输出目录（None 使用默认）
             save_format: 保存格式（'parquet', 'none'）
-            n_workers: 并行工作进程数（多实验并行）
-            use_parallel_executor: 是否在每个实验内部使用并行执行
+            execution_mode: 执行模式
+                - 'step': Step 级并行（**推荐**，最大并行度，47 workers + 1 consumer）
+                - 'experiment': 实验级并行（旧方式，向后兼容）
+            n_workers: 并行 worker 数量
+                - 'step' 模式: 固定为 47（配合 1 consumer = 48核）
+                - 'experiment' 模式: 实验级并行度（可调整）
             force_recompute: 是否强制重新计算（忽略已有特征）
 
         Returns:
@@ -2007,12 +2011,39 @@ class UnifiedExperimentManager:
                 - successful: 成功的实验ID列表
                 - failed: 失败的实验列表 [(id, error), ...]
                 - skipped: 跳过的实验ID列表
-                - timings: 每个实验的耗时
+                - timings: 每个实验的耗时（仅 'experiment' 模式）
                 - total_time_ms: 总耗时
 
         注意：
-            - 如果 save_format='parquet'，会自动更新数据库元数据
-            - 不需要手动扫描（元数据直接写入数据库）
+            - 'step' 模式（**推荐**）：
+                * 最细粒度并行（Feature × Step × Experiment）
+                * 使用生产者-消费者架构
+                * 自动聚合并保存 Parquet
+                * 内存占用低（即时释放）
+                * 适合大规模批量处理
+
+            - 'experiment' 模式（向后兼容）：
+                * 实验级并行
+                * 每个实验独立提取
+                * 内存占用较高
+                * 适合少量实验或调试
+
+        示例：
+            # Step 级并行（推荐，80实验 × 5steps × 10特征 = 4000任务并行）
+            result = manager.batch_extract_features_v2(
+                experiments=experiments,
+                feature_config='v2_transfer_basic',
+                execution_mode='step',  # ← Step 级并行
+                n_workers=47
+            )
+
+            # 实验级并行（旧方式，向后兼容）
+            result = manager.batch_extract_features_v2(
+                experiments=experiments,
+                feature_config='v2_transfer_basic',
+                execution_mode='experiment',  # ← 实验级并行
+                n_workers=48
+            )
         """
         from concurrent.futures import ProcessPoolExecutor, as_completed
         import time
@@ -2041,70 +2072,190 @@ class UnifiedExperimentManager:
         else:
             pending_experiments = experiments
 
-        logger.info(
-            f"开始批量提取 V2 特征: {len(pending_experiments)} 个实验，"
-            f"{n_workers} 个工作进程"
-        )
-
         total_start = time.time()
 
-        if n_workers == 1:
-            # 串行处理
-            for exp in pending_experiments:
-                self._extract_single_v2(
-                    exp, feature_config, output_dir, save_format, results, force_recompute
+        # ========== Step 级并行模式（新架构） ==========
+        if execution_mode == 'step':
+            logger.info(
+                f"🚀 使用 Step 级并行架构:\n"
+                f"  实验数: {len(pending_experiments)}\n"
+                f"  Worker 进程: {n_workers} + 1 消费者 = {n_workers + 1} 核"
+            )
+
+            # 创建 FeatureSet（用于获取计算图）
+            from infra.features_v2 import FeatureSet
+            from infra.features_v2.core.step_parallel_executor import StepLevelParallelExecutor
+            import infra.features_v2.extractors.transfer
+            import infra.features_v2.extractors.transient
+
+            # 解析配置并创建 FeatureSet
+            if isinstance(feature_config, str):
+                # 查找配置文件
+                config_path = self._find_feature_config(feature_config)
+                config_name = Path(config_path).stem
+
+                # 加载配置（使用第一个实验作为模板）
+                if pending_experiments:
+                    template_exp = pending_experiments[0]
+                    experiment = template_exp._get_experiment()
+                    feature_set = FeatureSet.from_config(str(config_path), experiment=experiment)
+                else:
+                    logger.warning("没有待处理的实验")
+                    return results
+            else:
+                # 内联配置
+                config_name = 'inline_config'
+                feature_set = FeatureSet()
+                for name, spec in feature_config.items():
+                    feature_set.add(
+                        name=name,
+                        extractor=spec.get('extractor'),
+                        func=spec.get('func'),
+                        input=spec.get('input'),
+                        params=spec.get('params', {}),
+                    )
+
+            # 创建并运行 Step 级并行执行器
+            executor = StepLevelParallelExecutor(
+                n_workers=n_workers,
+                output_dir=output_dir
+            )
+
+            try:
+                exec_stats = executor.execute(
+                    compute_graph=feature_set.graph,
+                    experiments=pending_experiments,
+                    config_name=config_name
                 )
+
+                # 所有实验都成功（由消费者进程处理）
+                results['successful'] = [exp.id for exp in pending_experiments]
+                results['total_tasks'] = exec_stats.get('total_tasks', 0)
+
+            except Exception as e:
+                logger.error(f"Step 级并行执行失败: {e}")
+                results['failed'] = [(exp.id, str(e)) for exp in pending_experiments]
+
+        # ========== 实验级并行模式（旧架构，向后兼容） ==========
+        elif execution_mode == 'experiment':
+            logger.info(
+                f"使用实验级并行架构（旧方式）:\n"
+                f"  实验数: {len(pending_experiments)}\n"
+                f"  Worker 进程: {n_workers}"
+            )
+
+            if n_workers == 1:
+                # 串行处理
+                for exp in pending_experiments:
+                    self._extract_single_v2(
+                        exp, feature_config, output_dir, save_format, results, force_recompute
+                    )
+            else:
+                # 并行处理
+                with ProcessPoolExecutor(max_workers=n_workers) as executor:
+                    futures = {
+                        executor.submit(
+                            _extract_v2_wrapper_old,
+                            exp.id,
+                            exp.chip_id,
+                            exp.device_id,
+                            exp.file_path,
+                            feature_config,
+                            output_dir,
+                            save_format,
+                        ): exp
+                        for exp in pending_experiments
+                    }
+
+                    for future in as_completed(futures):
+                        exp = futures[future]
+                        try:
+                            result_data = future.result()
+                            results['successful'].append(result_data['exp_id'])
+                            results['timings'][result_data['exp_id']] = result_data['time_ms']
+
+                            # 更新数据库元数据
+                            if save_format != 'none' and result_data.get('metadata'):
+                                self.catalog.repository.update_v2_feature_metadata(
+                                    result_data['exp_id'],
+                                    result_data['metadata']
+                                )
+
+                        except Exception as e:
+                            logger.error(f"实验 {exp.id} 提取失败: {e}")
+                            results['failed'].append((exp.id, str(e)))
+
         else:
-            # 并行处理（多实验并行）
-            with ProcessPoolExecutor(max_workers=n_workers) as executor:
-                futures = {
-                    executor.submit(
-                        _extract_v2_wrapper,
-                        exp.id,
-                        exp.chip_id,
-                        exp.device_id,
-                        exp.file_path,
-                        feature_config,
-                        output_dir,
-                        save_format,
-                    ): exp
-                    for exp in pending_experiments
-                }
-
-                for future in as_completed(futures):
-                    exp = futures[future]
-                    try:
-                        result_data = future.result()
-                        results['successful'].append(result_data['exp_id'])
-                        results['timings'][result_data['exp_id']] = result_data['time_ms']
-
-                        # 更新数据库元数据
-                        if save_format != 'none' and result_data.get('metadata'):
-                            self.catalog.repository.update_v2_feature_metadata(
-                                result_data['exp_id'],
-                                result_data['metadata']
-                            )
-
-                    except Exception as e:
-                        logger.error(f"实验 {exp.id} 提取失败: {e}")
-                        results['failed'].append((exp.id, str(e)))
+            raise ValueError(
+                f"未知的 execution_mode: {execution_mode}。"
+                f"支持的模式: 'step', 'experiment'"
+            )
 
         total_elapsed = (time.time() - total_start) * 1000
         results['total_time_ms'] = total_elapsed
 
         logger.info(
-            f"批量提取完成: 成功 {len(results['successful'])}, "
+            f"✅ 批量提取完成: 成功 {len(results['successful'])}, "
             f"失败 {len(results['failed'])}, "
             f"跳过 {len(results['skipped'])}, "
-            f"总耗时 {total_elapsed:.2f}ms"
+            f"总耗时 {total_elapsed:.2f}ms ({total_elapsed/1000:.1f}秒)"
         )
 
         return results
 
+    def _find_feature_config(self, config_name: str) -> Path:
+        """查找特征配置文件
+
+        Args:
+            config_name: 配置名称（如 'v2_transfer_basic'）
+
+        Returns:
+            配置文件路径
+
+        Raises:
+            ValueError: 如果配置文件不存在
+        """
+        # 1. 检查是否为完整路径
+        config_path = Path(config_name)
+        if config_path.suffix in ['.yaml', '.yml'] and config_path.exists():
+            return config_path
+
+        # 2. catalog/feature_configs
+        catalog_config_path = (
+            self.catalog.config.base_dir /
+            'infra/catalog/feature_configs' / f'{config_name}.yaml'
+        )
+        if catalog_config_path.exists():
+            return catalog_config_path
+
+        # 3. features_v2/config/templates
+        template_path = (
+            self.catalog.config.base_dir /
+            'infra/features_v2/config/templates' / f'{config_name}.yaml'
+        )
+        if template_path.exists():
+            return template_path
+
+        raise ValueError(
+            f"配置文件不存在: {config_name}\n"
+            f"已搜索:\n"
+            f"  - catalog/feature_configs/{config_name}.yaml\n"
+            f"  - features_v2/config/templates/{config_name}.yaml"
+        )
+
     def _extract_single_v2(
         self, exp, feature_config, output_dir, save_format, results, force_recompute=False
     ):
-        """单个实验的 V2 特征提取（内部辅助方法）"""
+        """单个实验的 V2 特征提取（内部辅助方法）
+
+        Args:
+            exp: UnifiedExperiment 实例
+            feature_config: 特征配置
+            output_dir: 输出目录
+            save_format: 保存格式
+            results: 结果字典（会被修改）
+            force_recompute: 是否强制重新计算
+        """
         import time
 
         try:
@@ -2419,10 +2570,10 @@ class UnifiedExperimentManager:
 
 # ==================== 并行提取辅助函数 ====================
 
-def _extract_v2_wrapper(
+def _extract_v2_wrapper_old(
     exp_id, chip_id, device_id, file_path, feature_config, output_dir, save_format
 ):
-    """V2 特征提取包装函数（用于多进程）
+    """V2 特征提取包装函数（用于多进程）- 实验级并行（旧方式）
 
     Args:
         exp_id: 实验ID

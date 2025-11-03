@@ -2,6 +2,7 @@
 Transient 特征提取器
 
 提取瞬态响应数据的特征
+支持 Step 级并行架构
 """
 
 from typing import Any, Dict, List, Tuple
@@ -31,33 +32,56 @@ class TransientCyclesExtractor(BaseExtractor):
     """
 
     def extract(self, data: Any, params: Dict[str, Any]) -> np.ndarray:
+        """批量提取（向后兼容）"""
         transient_list = data['transient'] if isinstance(data, dict) else data
 
         n_cycles = params.get('n_cycles', 100)
+        n_steps = len(transient_list)
+
+        # 调用单 step 提取并聚合
+        results = []
+        for step_data in transient_list:
+            cycles = self.extract_single_step(step_data, params)
+            results.append(cycles)
+
+        # 聚合为 (n_steps, n_cycles)
+        return self._aggregate_cycles(results, n_cycles)
+
+    def extract_single_step(self, step_data: Any, params: Dict[str, Any]) -> np.ndarray:
+        """单 step 提取（用于 step 级并行）"""
+        drain_current = step_data['drain_current']
+        n_cycles = params.get('n_cycles', 100)
         method = params.get('method', 'peak_detection')
 
-        n_steps = len(transient_list)
-        result = np.zeros((n_steps, n_cycles), dtype=np.float32)
+        if method == 'peak_detection':
+            return self._extract_by_peaks(drain_current, n_cycles, params)
+        elif method == 'fixed_interval':
+            return self._extract_by_interval(drain_current, n_cycles)
+        elif method == 'percentile':
+            return self._extract_by_percentile(drain_current, n_cycles)
+        else:
+            raise ValueError(f"未知的方法: {method}")
 
-        for i, step_data in enumerate(transient_list):
-            drain_current = step_data['drain_current']
+    def _aggregate_cycles(self, results: List[np.ndarray], n_cycles: int) -> np.ndarray:
+        """聚合单 step 结果为批量结果
 
-            if method == 'peak_detection':
-                cycles = self._extract_by_peaks(drain_current, n_cycles, params)
-            elif method == 'fixed_interval':
-                cycles = self._extract_by_interval(drain_current, n_cycles)
-            elif method == 'percentile':
-                cycles = self._extract_by_percentile(drain_current, n_cycles)
-            else:
-                raise ValueError(f"未知的方法: {method}")
+        Args:
+            results: 单 step 结果列表
+            n_cycles: 目标 cycle 数
 
-            # 填充结果（如果提取的 cycle 少于 n_cycles，用 NaN 填充）
+        Returns:
+            (n_steps, n_cycles) 数组
+        """
+        n_steps = len(results)
+        aggregated = np.zeros((n_steps, n_cycles), dtype=np.float32)
+
+        for i, cycles in enumerate(results):
             actual_cycles = min(len(cycles), n_cycles)
-            result[i, :actual_cycles] = cycles[:actual_cycles]
+            aggregated[i, :actual_cycles] = cycles[:actual_cycles]
             if actual_cycles < n_cycles:
-                result[i, actual_cycles:] = np.nan
+                aggregated[i, actual_cycles:] = np.nan
 
-        return result
+        return aggregated
 
     def _extract_by_peaks(
         self, drain_current: np.ndarray, n_cycles: int, params: Dict
@@ -139,7 +163,7 @@ class TransientCyclesExtractor(BaseExtractor):
     @property
     def output_shape(self) -> Tuple:
         n_cycles = self.params.get('n_cycles', 100)
-        return ('n_steps', n_cycles)
+        return (n_cycles,)  # 单 step 输出 (n_cycles,)
 
 
 @register('transient.peak_current')
@@ -151,25 +175,30 @@ class TransientPeakCurrentExtractor(BaseExtractor):
     """
 
     def extract(self, data: Any, params: Dict[str, Any]) -> np.ndarray:
+        """批量提取（向后兼容）"""
         transient_list = data['transient'] if isinstance(data, dict) else data
 
+        # 调用单 step 提取并聚合
+        results = []
+        for step_data in transient_list:
+            peak = self.extract_single_step(step_data, params)
+            results.append(peak)
+
+        return np.array(results, dtype=np.float32)
+
+    def extract_single_step(self, step_data: Any, params: Dict[str, Any]) -> float:
+        """单 step 提取（用于 step 级并行）"""
+        drain_current = step_data['drain_current']
         use_abs = params.get('use_abs', True)
-        n_steps = len(transient_list)
-        result = np.zeros(n_steps, dtype=np.float32)
 
-        for i, step_data in enumerate(transient_list):
-            drain_current = step_data['drain_current']
-
-            if use_abs:
-                result[i] = np.max(np.abs(drain_current))
-            else:
-                result[i] = np.max(drain_current)
-
-        return result
+        if use_abs:
+            return float(np.max(np.abs(drain_current)))
+        else:
+            return float(np.max(drain_current))
 
     @property
     def output_shape(self) -> Tuple:
-        return ('n_steps',)
+        return ()  # 单 step 输出标量
 
 
 @register('transient.decay_time')
@@ -184,36 +213,37 @@ class TransientDecayTimeExtractor(BaseExtractor):
     """
 
     def extract(self, data: Any, params: Dict[str, Any]) -> np.ndarray:
+        """批量提取（向后兼容）"""
         transient_list = data['transient'] if isinstance(data, dict) else data
+
+        # 调用单 step 提取并聚合
+        results = []
+        for step_data in transient_list:
+            tau = self.extract_single_step(step_data, params)
+            results.append(tau)
+
+        return np.array(results, dtype=np.float32)
+
+    def extract_single_step(self, step_data: Any, params: Dict[str, Any]) -> float:
+        """单 step 提取（用于 step 级并行）"""
+        continuous_time = step_data['continuous_time']
+        drain_current = step_data['drain_current']
 
         fit_range = params.get('fit_range', [0.1, 0.9])
         method = params.get('method', 'exponential')
 
-        n_steps = len(transient_list)
-        result = np.full(n_steps, np.nan, dtype=np.float32)
+        try:
+            if method == 'exponential':
+                tau = self._fit_exponential(continuous_time, drain_current, fit_range)
+            elif method == 'linear':
+                tau = self._fit_linear(continuous_time, drain_current, fit_range)
+            else:
+                raise ValueError(f"未知的方法: {method}")
 
-        for i, step_data in enumerate(transient_list):
-            continuous_time = step_data['continuous_time']
-            drain_current = step_data['drain_current']
-
-            try:
-                if method == 'exponential':
-                    tau = self._fit_exponential(
-                        continuous_time, drain_current, fit_range
-                    )
-                elif method == 'linear':
-                    tau = self._fit_linear(
-                        continuous_time, drain_current, fit_range
-                    )
-                else:
-                    raise ValueError(f"未知的方法: {method}")
-
-                result[i] = tau
-            except Exception as e:
-                logger.debug(f"Step {i} 衰减拟合失败: {e}")
-                result[i] = np.nan
-
-        return result
+            return float(tau)
+        except Exception as e:
+            logger.debug(f"衰减拟合失败: {e}")
+            return np.nan
 
     def _fit_exponential(
         self, time: np.ndarray, current: np.ndarray, fit_range: list
@@ -273,7 +303,7 @@ class TransientDecayTimeExtractor(BaseExtractor):
         t_fit = time[start_idx:end_idx]
         I_fit = np.abs(current[start_idx:end_idx])
 
-        # 过滤
+        # 过滤零值
         valid_mask = (I_fit > 0) & np.isfinite(I_fit) & np.isfinite(t_fit)
         t_fit = t_fit[valid_mask]
         I_fit = I_fit[valid_mask]
@@ -281,26 +311,175 @@ class TransientDecayTimeExtractor(BaseExtractor):
         if len(t_fit) < 3:
             raise ValueError("有效数据点不足")
 
-        # log(I) = log(I0) - t/tau
+        # 对数变换
         log_I = np.log(I_fit)
 
-        # 线性拟合
-        coeffs = np.polyfit(t_fit - t_fit[0], log_I, 1)
-        slope = coeffs[0]
-
-        # tau = -1 / slope
-        tau = -1 / slope
+        # 线性拟合 log(I) = log(I0) - t/tau
+        coeffs = np.polyfit(t_fit - t_fit[0], log_I, deg=1)
+        tau = -1 / coeffs[0]  # 斜率的倒数
 
         return tau
 
     @property
     def output_shape(self) -> Tuple:
-        return ('n_steps',)
+        n_cycles = self.params.get('n_cycles', 100)
+        return (n_cycles,)  # 单 step 输出 (n_cycles,)
 
 
-# 预注册所有 transient 提取器
-__all__ = [
-    'TransientCyclesExtractor',
-    'TransientPeakCurrentExtractor',
-    'TransientDecayTimeExtractor',
-]
+@register('transient.peak_current')
+class TransientPeakCurrentExtractor(BaseExtractor):
+    """提取 Transient 的峰值电流（单个标量）
+
+    参数：
+        use_abs: 是否使用绝对值（默认 True）
+    """
+
+    def extract(self, data: Any, params: Dict[str, Any]) -> np.ndarray:
+        """批量提取（向后兼容）"""
+        transient_list = data['transient'] if isinstance(data, dict) else data
+
+        # 调用单 step 提取并聚合
+        results = []
+        for step_data in transient_list:
+            peak = self.extract_single_step(step_data, params)
+            results.append(peak)
+
+        return np.array(results, dtype=np.float32)
+
+    def extract_single_step(self, step_data: Any, params: Dict[str, Any]) -> float:
+        """单 step 提取（用于 step 级并行）"""
+        drain_current = step_data['drain_current']
+        use_abs = params.get('use_abs', True)
+
+        if use_abs:
+            return float(np.max(np.abs(drain_current)))
+        else:
+            return float(np.max(drain_current))
+
+    @property
+    def output_shape(self) -> Tuple:
+        return ()  # 单 step 输出标量
+
+
+@register('transient.decay_time')
+class TransientDecayTimeExtractor(BaseExtractor):
+    """提取 Transient 的衰减时间常数
+
+    拟合指数衰减模型：I(t) = I0 * exp(-t/tau)
+
+    参数：
+        fit_range: 拟合范围（百分比，如 [0.1, 0.9] 表示使用中间 80% 的数据）
+        method: 拟合方法（'exponential', 'linear'）
+    """
+
+    def extract(self, data: Any, params: Dict[str, Any]) -> np.ndarray:
+        """批量提取（向后兼容）"""
+        transient_list = data['transient'] if isinstance(data, dict) else data
+
+        # 调用单 step 提取并聚合
+        results = []
+        for step_data in transient_list:
+            tau = self.extract_single_step(step_data, params)
+            results.append(tau)
+
+        return np.array(results, dtype=np.float32)
+
+    def extract_single_step(self, step_data: Any, params: Dict[str, Any]) -> float:
+        """单 step 提取（用于 step 级并行）"""
+        continuous_time = step_data['continuous_time']
+        drain_current = step_data['drain_current']
+
+        fit_range = params.get('fit_range', [0.1, 0.9])
+        method = params.get('method', 'exponential')
+
+        try:
+            if method == 'exponential':
+                tau = self._fit_exponential(continuous_time, drain_current, fit_range)
+            elif method == 'linear':
+                tau = self._fit_linear(continuous_time, drain_current, fit_range)
+            else:
+                raise ValueError(f"未知的方法: {method}")
+
+            return float(tau)
+        except Exception as e:
+            logger.debug(f"衰减拟合失败: {e}")
+            return np.nan
+
+    def _fit_exponential(
+        self, time: np.ndarray, current: np.ndarray, fit_range: list
+    ) -> float:
+        """指数衰减拟合"""
+        # 选择拟合范围
+        n_points = len(time)
+        start_idx = int(n_points * fit_range[0])
+        end_idx = int(n_points * fit_range[1])
+
+        t_fit = time[start_idx:end_idx]
+        I_fit = np.abs(current[start_idx:end_idx])  # 使用绝对值
+
+        # 过滤零值和 NaN
+        valid_mask = (I_fit > 0) & np.isfinite(I_fit) & np.isfinite(t_fit)
+        t_fit = t_fit[valid_mask]
+        I_fit = I_fit[valid_mask]
+
+        if len(t_fit) < 3:
+            raise ValueError("有效数据点不足")
+
+        # 指数衰减模型
+        def exp_decay(t, I0, tau):
+            return I0 * np.exp(-t / tau)
+
+        # 初始猜测
+        I0_guess = I_fit[0]
+        tau_guess = (t_fit[-1] - t_fit[0]) / 2
+
+        # 拟合
+        try:
+            popt, _ = optimize.curve_fit(
+                exp_decay,
+                t_fit - t_fit[0],  # 归零时间
+                I_fit,
+                p0=[I0_guess, tau_guess],
+                maxfev=1000,
+                bounds=([0, 0], [np.inf, np.inf]),
+            )
+            tau = popt[1]
+            return tau
+        except Exception:
+            # 拟合失败，使用半衰期估计
+            half_max = I_fit[0] / 2
+            idx = np.argmin(np.abs(I_fit - half_max))
+            tau = (t_fit[idx] - t_fit[0]) / np.log(2)
+            return tau
+
+    def _fit_linear(
+        self, time: np.ndarray, current: np.ndarray, fit_range: list
+    ) -> float:
+        """对数线性拟合（log(I) vs t）"""
+        n_points = len(time)
+        start_idx = int(n_points * fit_range[0])
+        end_idx = int(n_points * fit_range[1])
+
+        t_fit = time[start_idx:end_idx]
+        I_fit = np.abs(current[start_idx:end_idx])
+
+        # 过滤零值
+        valid_mask = (I_fit > 0) & np.isfinite(I_fit) & np.isfinite(t_fit)
+        t_fit = t_fit[valid_mask]
+        I_fit = I_fit[valid_mask]
+
+        if len(t_fit) < 3:
+            raise ValueError("有效数据点不足")
+
+        # 对数变换
+        log_I = np.log(I_fit)
+
+        # 线性拟合 log(I) = log(I0) - t/tau
+        coeffs = np.polyfit(t_fit - t_fit[0], log_I, deg=1)
+        tau = -1 / coeffs[0]  # 斜率的倒数
+
+        return tau
+
+    @property
+    def output_shape(self) -> Tuple:
+        return ()  # 单 step 输出标量
