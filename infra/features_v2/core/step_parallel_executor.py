@@ -44,7 +44,8 @@ class StepLevelParallelExecutor:
         self,
         n_workers: int = 47,
         consumer_buffer_size: int = 10000,
-        output_dir: Optional[str] = None
+        output_dir: Optional[str] = None,
+        extra_imports: Optional[List[str]] = None
     ):
         """初始化执行器
 
@@ -52,10 +53,12 @@ class StepLevelParallelExecutor:
             n_workers: Worker 进程数量（默认47，配合1个消费者=48核）
             consumer_buffer_size: 结果队列缓冲区大小
             output_dir: Parquet 输出目录
+            extra_imports: 外部模块导入列表（如 ['autotau_extractors']）
         """
         self.n_workers = n_workers
         self.consumer_buffer_size = consumer_buffer_size
         self.output_dir = output_dir
+        self.extra_imports = extra_imports or []
 
         # 进程间通信队列
         self.task_queue = None
@@ -293,7 +296,8 @@ class StepLevelParallelExecutor:
                     self.task_queue,
                     self.result_queue,
                     self.completion_counter,
-                    worker_id
+                    worker_id,
+                    self.extra_imports  # ✨ 传递额外导入列表
                 ),
                 name=f"Worker-{worker_id}"
             )
@@ -369,7 +373,8 @@ def _worker_process_func(
     task_queue: multiprocessing.Queue,
     result_queue: multiprocessing.Queue,
     completion_counter: multiprocessing.Value,
-    worker_id: int
+    worker_id: int,
+    extra_imports: List[str] = None
 ):
     """Worker 进程执行函数
 
@@ -380,12 +385,27 @@ def _worker_process_func(
         result_queue: 结果队列
         completion_counter: 完成计数器（共享）
         worker_id: Worker ID
+        extra_imports: 外部模块导入列表
     """
     # 导入必要的模块（在子进程中导入，避免序列化问题）
     from infra.experiment import Experiment
     from infra.features_v2.extractors import get_extractor
     import infra.features_v2.extractors.transfer
     import infra.features_v2.extractors.transient
+
+    # ✨ 动态导入外部模块（如 autotau_extractors）
+    if extra_imports:
+        import importlib
+        for module_name in extra_imports:
+            try:
+                importlib.import_module(module_name)
+                # 仅在第一个 worker 打印日志
+                if worker_id == 0:
+                    logger = get_module_logger()
+                    logger.info(f"✓ Worker 成功导入外部模块: {module_name}")
+            except Exception as e:
+                logger = get_module_logger()
+                logger.warning(f"⚠️ Worker-{worker_id} 导入模块 '{module_name}' 失败: {e}")
 
     logger = get_module_logger()
     logger.info(f"Worker-{worker_id} 启动")

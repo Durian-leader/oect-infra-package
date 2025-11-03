@@ -2094,6 +2094,24 @@ class UnifiedExperimentManager:
                 config_path = self._find_feature_config(feature_config)
                 config_name = Path(config_path).stem
 
+                # ✨ 加载配置文件以检查 imports 字段
+                import yaml
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config_dict = yaml.safe_load(f)
+
+                # ✨ 提取 imports 列表
+                extra_imports = config_dict.get('imports', []) if isinstance(config_dict.get('imports'), list) else []
+
+                # ✨ 动态导入外部模块（如 autotau_extractors）- 主进程
+                if extra_imports:
+                    for module_name in extra_imports:
+                        try:
+                            import importlib
+                            importlib.import_module(module_name)
+                            logger.info(f"✓ 主进程成功导入外部模块: {module_name}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ 主进程导入模块 '{module_name}' 失败: {e}")
+
                 # 加载配置（使用第一个实验作为模板）
                 if pending_experiments:
                     template_exp = pending_experiments[0]
@@ -2105,6 +2123,7 @@ class UnifiedExperimentManager:
             else:
                 # 内联配置
                 config_name = 'inline_config'
+                extra_imports = []
                 feature_set = FeatureSet()
                 for name, spec in feature_config.items():
                     feature_set.add(
@@ -2115,10 +2134,11 @@ class UnifiedExperimentManager:
                         params=spec.get('params', {}),
                     )
 
-            # 创建并运行 Step 级并行执行器
+            # 创建并运行 Step 级并行执行器（✨ 传递 extra_imports）
             executor = StepLevelParallelExecutor(
                 n_workers=n_workers,
-                output_dir=output_dir
+                output_dir=output_dir,
+                extra_imports=extra_imports  # ✨ 传递给 worker 进程
             )
 
             try:
