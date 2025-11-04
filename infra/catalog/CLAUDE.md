@@ -84,7 +84,12 @@ catalog/
     - `clean_json_files(source_directory, pattern='test_info.json') -> Dict`
     - `discover_test_directories(source_directory, exclude_output_dir=True) -> List[str]`
     - `batch_convert_folders(test_directories, num_workers=20, conflict_strategy='skip', show_progress=True) -> Dict`
-    - `process_data_pipeline(source_directory, clean_json=True, num_workers=20, conflict_strategy='skip', auto_extract_features=False, feature_version='v1'|'v2'|'both', v2_feature_config='v2_transfer_basic', show_progress=True) -> Dict`
+    - `process_data_pipeline(source_directory, clean_json=True, num_workers=20, conflict_strategy='skip', v1_feature_versions: Optional[List[str]]=None, v2_feature_configs: Optional[List[str]]=None, show_progress=True) -> Dict`
+      - **重构说明**（2025-11-04）：移除 `auto_extract_features`、`feature_version`、`v2_feature_config` 参数
+      - **新参数**：
+        - `v1_feature_versions`：features_version 模块的版本列表（如 `['v1', 'v2']`），对应 `{version}_feature.py` 文件，`None` 或 `[]` 表示不使用
+        - `v2_feature_configs`：features_v2 模块的配置名列表（如 `['v2_transfer_basic', 'v2_ml_ready']`），`None` 或 `[]` 表示不使用
+      - **详细文档**：见 `catalog/PROCESS_DATA_PIPELINE_GUIDE.md`
     - `batch_extract_features(experiments_or_query, version='v1') -> Dict`（V1 提取后建议执行 `scan_and_index(incremental=False)` 以重新关联）
   - 批量导出与组合特征：
     - `export_experiments_info(experiments, output_path) -> bool`

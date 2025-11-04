@@ -1825,11 +1825,10 @@ class UnifiedExperimentManager:
     
     def process_data_pipeline(self, source_directory: Union[str, Path],
                              clean_json: bool = True,
-                             num_workers: int = 20,
+                             num_workers: int = 90,
                              conflict_strategy: str = 'skip',
-                             auto_extract_features: bool = False,
-                             feature_version: str = 'v1',
-                             v2_feature_config: Optional[str] = 'v2_transfer_basic',
+                             v1_feature_versions: Optional[List[str]] = None,
+                             v2_feature_configs: Optional[List[str]] = None,
                              show_progress: bool = True) -> Dict[str, Any]:
         """
         执行完整的数据处理管道：JSON清理 -> 目录发现 -> 批量转换 -> 可选特征提取
@@ -1839,13 +1838,24 @@ class UnifiedExperimentManager:
             clean_json: 是否先清理JSON文件
             num_workers: 并行工作进程数
             conflict_strategy: 冲突处理策略
-            auto_extract_features: 是否自动提取特征
-            feature_version: 特征版本（'v1', 'v2', 'both'）
-            v2_feature_config: V2 配置（仅当 feature_version='v2' 或 'both' 时使用）
+            v1_feature_versions: features_version 模块的特征版本列表（如 ['v1', 'v2']），
+                                对应 features_version 目录下的 vN_feature.py 文件。
+                                None 或空列表表示不使用 features_version 提取
+            v2_feature_configs: features_v2 模块的配置名列表（如 ['v2_transfer_basic', 'v2_ml_ready']）。
+                               None 或空列表表示不使用 features_v2 提取
             show_progress: 是否显示进度条
 
         Returns:
             Dict[str, Any]: 完整处理结果
+                - source_directory: 源目录路径
+                - steps_completed: 完成的步骤列表
+                - overall_success: 总体成功标志
+                - results: 各步骤详细结果
+                  - json_cleaning (可选)
+                  - discovery
+                  - conversion
+                  - v1_feature_extraction_{version} (可选，每个版本一个)
+                  - v2_feature_extraction_{config} (可选，每个配置一个)
         """
         pipeline_result = {
             'source_directory': str(source_directory),
@@ -1893,30 +1903,115 @@ class UnifiedExperimentManager:
                 raise Exception(f"Conversion failed: {convert_result.get('error', 'Unknown error')}")
             
             # 步骤4: 特征提取（可选）
-            if auto_extract_features and convert_result['successful_conversions'] > 0:
+            # 根据参数决定是否提取特征（None 或空列表表示不提取）
+            extract_v1 = v1_feature_versions is not None and len(v1_feature_versions) > 0
+            extract_v2 = v2_feature_configs is not None and len(v2_feature_configs) > 0
+
+            if (extract_v1 or extract_v2) and convert_result['successful_conversions'] > 0:
                 logger.info("Pipeline Step 4: Extracting features...")
 
-                # 获取新转换的实验
-                recent_experiments = self.search()  # 简化：获取所有实验，实际可以根据时间戳过滤
+                # 获取新转换的实验（可以考虑根据时间戳过滤，现在简化为所有实验）
+                recent_experiments = self.search()
 
                 if recent_experiments:
-                    # V1 特征提取
-                    if feature_version in ['v1', 'both']:
-                        logger.info("Extracting V1 features...")
-                        feature_result_v1 = self.batch_extract_features(recent_experiments)
-                        pipeline_result['results']['feature_extraction_v1'] = feature_result_v1
-                        pipeline_result['steps_completed'].append('feature_extraction_v1')
+                    # features_version 特征提取（V1, V2, ... 等版本）
+                    if extract_v1:
+                        logger.info(f"Extracting features_version features: {v1_feature_versions}")
 
-                    # V2 特征提取
-                    if feature_version in ['v2', 'both']:
-                        logger.info(f"Extracting V2 features (config: {v2_feature_config})...")
-                        feature_result_v2 = self.batch_extract_features_v2(
-                            recent_experiments,
-                            feature_config=v2_feature_config,
-                            n_workers=min(num_workers, 4),  # 限制并行数
-                        )
-                        pipeline_result['results']['feature_extraction_v2'] = feature_result_v2
-                        pipeline_result['steps_completed'].append('feature_extraction_v2')
+                        for version in v1_feature_versions:
+                            logger.info(f"  Processing version: {version}")
+
+                            try:
+                                # 动态导入对应的函数（如 v1_feature, v2_feature）
+                                module_name = f'..features_version.{version}_feature'
+                                function_name = f'{version}_feature'
+
+                                # 使用 importlib 动态导入
+                                import importlib
+                                try:
+                                    # 尝试从 features_version 导入
+                                    module = importlib.import_module(module_name, package='infra.catalog')
+                                    feature_func = getattr(module, function_name)
+                                except (ImportError, AttributeError) as e:
+                                    logger.error(f"    Failed to import {function_name} from {module_name}: {e}")
+                                    pipeline_result['results'][f'v1_feature_extraction_{version}'] = {
+                                        'success': False,
+                                        'error': f'Import failed: {e}'
+                                    }
+                                    continue
+
+                                # 批量提取特征
+                                results = {'successful': [], 'failed': [], 'skipped': []}
+                                features_dir = str(self.catalog.config.get_absolute_path('features'))
+
+                                for exp in recent_experiments:
+                                    try:
+                                        # 检查是否已有该版本的特征
+                                        if exp.has_features(version):
+                                            results['skipped'].append(exp.id)
+                                            continue
+
+                                        # 获取原始数据路径
+                                        if exp.id is not None:
+                                            raw_path = self.catalog.get_experiment_file_path(exp.id, 'raw')
+                                            if not raw_path or not Path(raw_path).exists():
+                                                results['failed'].append((exp.id, "Raw file not found"))
+                                                continue
+
+                                            # 执行特征提取
+                                            feature_func(raw_path, output_dir=features_dir)
+
+                                            # 刷新实验对象缓存
+                                            exp._invalidate_cache()
+                                            results['successful'].append(exp.id)
+                                        else:
+                                            results['failed'].append((exp.id, "Invalid experiment ID"))
+
+                                    except Exception as e:
+                                        results['failed'].append((exp.id, str(e)))
+                                        logger.error(f"    Failed to extract {version} features for exp {exp.id}: {e}")
+
+                                # 保存结果
+                                pipeline_result['results'][f'v1_feature_extraction_{version}'] = results
+                                pipeline_result['steps_completed'].append(f'v1_feature_extraction_{version}')
+
+                                logger.info(f"    {version} features: {len(results['successful'])} successful, "
+                                          f"{len(results['failed'])} failed, {len(results['skipped'])} skipped")
+
+                            except Exception as e:
+                                logger.error(f"  Failed to process version {version}: {e}")
+                                pipeline_result['results'][f'v1_feature_extraction_{version}'] = {
+                                    'success': False,
+                                    'error': str(e)
+                                }
+
+                    # features_v2 特征提取（配置列表）
+                    if extract_v2:
+                        logger.info(f"Extracting features_v2 features: {v2_feature_configs}")
+
+                        for config_name in v2_feature_configs:
+                            logger.info(f"  Processing config: {config_name}")
+
+                            try:
+                                feature_result_v2 = self.batch_extract_features_v2(
+                                    recent_experiments,
+                                    feature_config=config_name,
+                                    n_workers=min(num_workers, 90),  # 限制并行数以避免冲突
+                                )
+
+                                pipeline_result['results'][f'v2_feature_extraction_{config_name}'] = feature_result_v2
+                                pipeline_result['steps_completed'].append(f'v2_feature_extraction_{config_name}')
+
+                                logger.info(f"    {config_name}: {len(feature_result_v2.get('successful', []))} successful, "
+                                          f"{len(feature_result_v2.get('failed', []))} failed, "
+                                          f"{len(feature_result_v2.get('skipped', []))} skipped")
+
+                            except Exception as e:
+                                logger.error(f"  Failed to extract V2 features with config {config_name}: {e}")
+                                pipeline_result['results'][f'v2_feature_extraction_{config_name}'] = {
+                                    'success': False,
+                                    'error': str(e)
+                                }
 
             logger.info(f"Data processing pipeline completed successfully for {source_directory}")
             return pipeline_result
