@@ -14,6 +14,8 @@ pyproject.toml
 ./infra/main20250929.py
 ./infra/数据处理记录.md
 ./infra/catalog/CLAUDE.md
+./infra/catalog/PROCESS_DATA_PIPELINE_GUIDE.md
+./infra/catalog/REFACTORING_SUMMARY.md
 ./infra/catalog/__init__.py
 ./infra/catalog/__main__.py
 ./infra/catalog/cli.py
@@ -27,6 +29,7 @@ pyproject.toml
 ./infra/catalog/docs/V2_INTEGRATION_GUIDE.md
 ./infra/catalog/docs/WORKFLOW_SEARCH_GUIDE.md
 ./infra/catalog/example/catalog_config.yaml
+./infra/catalog/example/process_data_pipeline_example.py
 ./infra/catalog/examples/v2_integration_demo.py
 ./infra/catalog/feature_configs/README.md
 ./infra/catalog/feature_configs/v2_ml_ready.yaml
@@ -106,9 +109,14 @@ pyproject.toml
 ./infra/features_v2/utils/__init__.py
 ./infra/features_v2/utils/indexing.py
 ./infra/features_version/CLAUDE.md
+./infra/features_version/V2_FEATURE_README.md
+./infra/features_version/V2_FEATURE_SUMMARY.md
+./infra/features_version/__init__.py
 ./infra/features_version/batch_create_feature.py
 ./infra/features_version/create_version_utils.py
 ./infra/features_version/v1_feature.py
+./infra/features_version/v2_feature.py
+./infra/features_version/example/v2_feature_demo.py
 ./infra/infra/catalog_config.yaml
 ./infra/oect_transfer/CLAUDE.md
 ./infra/oect_transfer/__init__.py
@@ -143,6 +151,8 @@ infra/logger_config.py
 infra/main20250929.py
 infra/数据处理记录.md
 infra/catalog/CLAUDE.md
+infra/catalog/PROCESS_DATA_PIPELINE_GUIDE.md
+infra/catalog/REFACTORING_SUMMARY.md
 infra/catalog/__init__.py
 infra/catalog/__main__.py
 infra/catalog/cli.py
@@ -156,6 +166,7 @@ infra/catalog/unified.py
 infra/catalog/docs/V2_INTEGRATION_GUIDE.md
 infra/catalog/docs/WORKFLOW_SEARCH_GUIDE.md
 infra/catalog/example/catalog_config.yaml
+infra/catalog/example/process_data_pipeline_example.py
 infra/catalog/examples/v2_integration_demo.py
 infra/catalog/feature_configs/README.md
 infra/catalog/feature_configs/v2_ml_ready.yaml
@@ -235,9 +246,14 @@ infra/features_v2/transforms/normalize.py
 infra/features_v2/utils/__init__.py
 infra/features_v2/utils/indexing.py
 infra/features_version/CLAUDE.md
+infra/features_version/V2_FEATURE_README.md
+infra/features_version/V2_FEATURE_SUMMARY.md
+infra/features_version/__init__.py
 infra/features_version/batch_create_feature.py
 infra/features_version/create_version_utils.py
 infra/features_version/v1_feature.py
+infra/features_version/v2_feature.py
+infra/features_version/example/v2_feature_demo.py
 infra/oect_transfer/CLAUDE.md
 infra/oect_transfer/__init__.py
 infra/oect_transfer/batch_transfer.py
