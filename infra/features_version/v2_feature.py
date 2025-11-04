@@ -17,11 +17,12 @@ logger = get_module_logger()
 def v2_feature(
     raw_file_path: str,
     output_dir: str = "data/features",
-    period: Optional[float] = None,
-    max_workers: Optional[int] = None,
+    sample_rate: Optional[float] = 1000,
+    period: Optional[float] = 0.25,
+    max_workers: Optional[int] = 48,
     window_scalar_min: float = 0.2,
-    window_scalar_max: float = 0.333,
-    window_points_step: int = 10,
+    window_scalar_max: float = 0.4,
+    window_points_step: int = 5,
     show_progress: bool = False
 ) -> str:
     """
@@ -33,10 +34,11 @@ def v2_feature(
         raw_file_path: 原始实验数据文件路径
         output_dir: 输出目录，默认为 data/features/
         period: transient 信号周期（秒），如果为 None 将从数据中自动估计
+        sample_rate: 采样率 Hz
         max_workers: 并行工作进程数，None 表示使用 CPU 核心数
         window_scalar_min: 窗口搜索的最小标量（相对于周期），默认 0.2
-        window_scalar_max: 窗口搜索的最大标量（相对于周期），默认 0.333
-        window_points_step: 窗口点数步长，默认 10
+        window_scalar_max: 窗口搜索的最大标量（相对于周期），默认 0.4
+        window_points_step: 窗口点数步长，默认 5
         show_progress: 是否显示进度条，默认 False
 
     Returns:
@@ -104,25 +106,6 @@ def v2_feature(
 
     logger.info(f"Transient 数据点数: {len(time)}")
     logger.info(f"时间范围: {time[0]:.6f}s ~ {time[-1]:.6f}s")
-
-    # 3. 估计采样率和周期
-    logger.info("3. 估计采样率和周期...")
-    # 计算采样率（Hz）
-    dt = np.diff(time)
-    sample_rate = 1.0 / np.mean(dt)
-    logger.info(f"采样率: {sample_rate:.2f} Hz")
-
-    # 如果用户未提供周期，从数据中估计
-    if period is None:
-        # 简单估计：假设数据包含多个完整周期，取总时长除以周期数
-        # 这里需要根据实际情况调整，或要求用户提供
-        total_duration = time[-1] - time[0]
-        # 假设至少有10个周期
-        estimated_cycles = max(10, int(total_duration * sample_rate / 100))
-        period = total_duration / estimated_cycles
-        logger.info(f"⚠️ 未指定周期，自动估计: {period:.6f}s ({estimated_cycles} 个周期)")
-    else:
-        logger.info(f"使用指定周期: {period:.6f}s")
 
     # 计算理论周期数
     total_cycles = int((time[-1] - time[0]) / period)
