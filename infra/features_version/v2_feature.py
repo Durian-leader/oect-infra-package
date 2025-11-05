@@ -1,5 +1,4 @@
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor
 from typing import Optional, Dict, Any
 from ..experiment import Experiment
 from ..features import (
@@ -19,26 +18,30 @@ def v2_feature(
     output_dir: str = "data/features",
     sample_rate: Optional[float] = 1000,
     period: Optional[float] = 0.25,
-    max_workers: Optional[int] = 48,
     window_scalar_min: float = 0.2,
     window_scalar_max: float = 0.4,
-    window_points_step: int = 5,
+    window_points_step: int = 50,
+    window_start_idx_step: int = 1,
+    normalize: bool = False,
+    language: str = 'en',
     show_progress: bool = False
 ) -> str:
     """
-    使用 autotau 包和 features 包创建 transient 特征文件（tau_on 和 tau_off）
+    使用 autotau 0.3.1 包和 features 包创建 transient 特征文件（tau_on 和 tau_off）
 
-    该函数利用 autotau 的并行能力提取 transient 数据的时间常数特征。
+    该函数使用 autotau 的 CyclesAutoTauFitter 提取 transient 数据的时间常数特征。
 
     Args:
         raw_file_path: 原始实验数据文件路径
         output_dir: 输出目录，默认为 data/features/
-        period: transient 信号周期（秒），如果为 None 将从数据中自动估计
-        sample_rate: 采样率 Hz
-        max_workers: 并行工作进程数，None 表示使用 CPU 核心数
+        sample_rate: 采样率 Hz，默认 1000
+        period: transient 信号周期（秒），默认 0.25
         window_scalar_min: 窗口搜索的最小标量（相对于周期），默认 0.2
-        window_scalar_max: 窗口搜索的最大标量（相对于周期），默认 0.4
-        window_points_step: 窗口点数步长，默认 5
+        window_scalar_max: 窗口搜索的最大标量（相对于周期），默认 0.333
+        window_points_step: 窗口点数步长，默认 10
+        window_start_idx_step: 窗口起始位置步长，默认 1
+        normalize: 是否归一化信号，默认 False
+        language: 界面语言 ('cn' 或 'en')，默认 'en'
         show_progress: 是否显示进度条，默认 False
 
     Returns:
@@ -77,7 +80,7 @@ def v2_feature(
             device_id=summary['device_info']['device_number'],
             description=summary['basic_info']['description'],
             test_id=summary['basic_info']['test_id'],
-            built_with="features v2.0.0 (autotau)"
+            built_with="features v2.0.0 (autotau 0.3.1)"
         )
         logger.info(f"✅ HDF5文件结构创建成功：{final_feature_file}")
 
@@ -111,52 +114,36 @@ def v2_feature(
     total_cycles = int((time[-1] - time[0]) / period)
     logger.info(f"理论周期数: {total_cycles}")
 
-    # 4. 使用 autotau 提取 tau_on 和 tau_off（多核并行）
-    logger.info("4. 使用 autotau 提取 tau_on 和 tau_off（多核并行）...")
+    # 4. 使用 autotau 提取 tau_on 和 tau_off
+    logger.info("4. 使用 autotau 0.3.1 提取 tau_on 和 tau_off...")
 
     try:
-        from autotau import CyclesAutoTauFitter, AutoTauFitter
+        from autotau import ParallelCyclesAutoTauFitter
 
-        # 创建并行执行器
-        executor = ProcessPoolExecutor(max_workers=max_workers)
-        logger.info(f"并行工作进程数: {max_workers if max_workers else '默认（CPU核心数）'}")
-
-        # 定义 fitter_factory 以注入并行能力
-        def fitter_factory(time_slice, signal_slice, **kwargs):
-            """创建支持并行窗口搜索的 AutoTauFitter"""
-            return AutoTauFitter(
-                time=time_slice,
-                signal=signal_slice,
-                sample_step=int(kwargs.get('sample_step', 1)),
-                period=kwargs.get('period', period),
-                window_scalar_min=window_scalar_min,
-                window_scalar_max=window_scalar_max,
-                window_points_step=window_points_step,
-                normalize=False,
-                show_progress=False,  # 单个周期不显示进度
-                executor=executor  # 🚀 注入并行执行器
-            )
-
-        # 创建 CyclesAutoTauFitter
-        cycles_fitter = CyclesAutoTauFitter(
+        # 创建 CyclesAutoTauFitter（0.3.1 版本接口）
+        cycles_fitter = ParallelCyclesAutoTauFitter(
             time=time,
             signal=signal,
             period=period,
             sample_rate=sample_rate,
-            fitter_factory=fitter_factory
+            window_scalar_min=window_scalar_min,
+            window_scalar_max=window_scalar_max,
+            window_points_step=window_points_step,
+            window_start_idx_step=window_start_idx_step,
+            normalize=normalize,
+            language=language,
+            show_progress=show_progress,
+            max_workers=48
         )
 
         logger.info("开始拟合所有周期...")
 
         # 拟合所有周期
         results = cycles_fitter.fit_all_cycles(
-            interp=True,
-            points_after_interp=100,
+            interp=False,
+            # points_after_interp=100,
             r_squared_threshold=0.95
         )
-
-        # 关闭执行器
-        executor.shutdown(wait=True)
 
         logger.info(f"拟合完成，共 {len(results)} 个周期")
 
@@ -174,18 +161,22 @@ def v2_feature(
     tau_off_r2_list = []
 
     for cycle_idx, cycle_result in enumerate(results):
-        # 检查拟合是否成功
-        if cycle_result.get('status') == 'success':
-            tau_on = cycle_result.get('tau_on', np.nan)
-            tau_off = cycle_result.get('tau_off', np.nan)
-            tau_on_r2 = cycle_result.get('tau_on_r2', np.nan)
-            tau_off_r2 = cycle_result.get('tau_off_r2', np.nan)
-        else:
+        # autotau 0.3.1 返回格式（没有 status 字段）
+        # 如果拟合失败，tau 值会是 None 或不存在
+        tau_on = cycle_result.get('tau_on', np.nan)
+        tau_off = cycle_result.get('tau_off', np.nan)
+        tau_on_r2 = cycle_result.get('tau_on_r_squared', np.nan)
+        tau_off_r2 = cycle_result.get('tau_off_r_squared', np.nan)
+
+        # 将 None 转换为 np.nan
+        if tau_on is None:
             tau_on = np.nan
+        if tau_off is None:
             tau_off = np.nan
+        if tau_on_r2 is None:
             tau_on_r2 = np.nan
+        if tau_off_r2 is None:
             tau_off_r2 = np.nan
-            logger.warning(f"周期 {cycle_idx} 拟合失败")
 
         tau_on_list.append(tau_on)
         tau_off_list.append(tau_off)

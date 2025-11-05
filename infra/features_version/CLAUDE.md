@@ -53,26 +53,28 @@ features_version/
   - 异常：若原始文件不含可用 Transfer 数据，将抛出 `ValueError`。
   - 文件命名：目标文件名由 `features.FeatureFileCreator.parse_raw_filename_to_feature(...)` 从原始文件名推导。
 
-- `v2_feature(raw_file_path: str, output_dir: str = "data/features", period: Optional[float] = None, max_workers: Optional[int] = None, window_scalar_min: float = 0.2, window_scalar_max: float = 0.333, window_points_step: int = 10, show_progress: bool = False) -> str`
+- `v2_feature(raw_file_path: str, output_dir: str = "data/features", sample_rate: Optional[float] = 1000, period: Optional[float] = 0.25, window_scalar_min: float = 0.2, window_scalar_max: float = 0.333, window_points_step: int = 10, window_start_idx_step: int = 1, normalize: bool = False, language: str = 'en', show_progress: bool = False) -> str`
   - 作用：
     - 基于原始实验文件提取 Transient 特征（tau_on 和 tau_off）并写入 HDF5 特征文件。
-    - 使用 **autotau** 包的 `CyclesAutoTauFitter` 进行自动窗口搜索和拟合。
-    - 支持 **多核并行处理**（通过 `ProcessPoolExecutor`）以加速窗口搜索。
+    - 使用 **autotau 0.3.1** 包的 `CyclesAutoTauFitter` 进行自动窗口搜索和拟合。
     - 若目标特征文件不存在，则通过 `features.FeatureFileCreator` 新建基础结构；存在则复用并覆盖对应特征数据。
     - 写入完成后，调用通用版本化工具创建版本矩阵（版本名固定为 `"v2"`，数据类型为 `"transient"`），并执行结构校验。
   - 输入：
     - `raw_file_path`：原始实验 H5 文件路径（必须包含 Transient 数据）。
     - `output_dir`：输出目录，默认 `data/features`。
-    - `period`：Transient 信号周期（秒），如果为 `None` 将从数据中自动估计。
-    - `max_workers`：并行工作进程数，`None` 表示使用 CPU 核心数。
+    - `sample_rate`：采样率（Hz），默认 1000。
+    - `period`：Transient 信号周期（秒），默认 0.25。
     - `window_scalar_min`：窗口搜索的最小标量（相对于周期），默认 0.2。
     - `window_scalar_max`：窗口搜索的最大标量（相对于周期），默认 0.333。
     - `window_points_step`：窗口点数步长，默认 10。
+    - `window_start_idx_step`：窗口起始位置步长，默认 1。
+    - `normalize`：是否归一化信号，默认 False。
+    - `language`：界面语言（'cn' 或 'en'），默认 'en'。
     - `show_progress`：是否显示进度条，默认 False。
   - 返回：生成（或更新）的特征文件完整路径字符串。
   - 依赖与数据流：
     - `experiment.Experiment`：读取实验概要与 Transient 数据。
-    - `autotau.CyclesAutoTauFitter` + `autotau.AutoTauFitter`：从时序数据拟合 tau_on 和 tau_off。
+    - `autotau.CyclesAutoTauFitter`：从时序数据拟合 tau_on 和 tau_off。
     - `features.FeatureRepository`：写入特征到 `data_type="transient"`、`bucket_name="bk_00"`，覆盖写入（`overwrite=True`）。
     - `create_version_from_all_features(...)`：基于"仓库内此数据类型的全部可读特征"创建版本矩阵并校验。
   - 输出特征键（逐周期数组）：
@@ -82,10 +84,11 @@ features_version/
     - `tau_off_r2`：tau_off 拟合的 R² 值
   - 异常：若原始文件不含可用 Transient 数据，将抛出 `ValueError`。
   - 文件命名：目标文件名由 `features.FeatureFileCreator.parse_raw_filename_to_feature(...)` 从原始文件名推导。
-  - 性能说明：
-    - 使用 `ProcessPoolExecutor` 实现多核并行，适合处理大量周期数据。
-    - 推荐设置：小文件（<1000周期）`max_workers=2-4`，大文件（>5000周期）`max_workers=8-16`。
-    - autotau 版本要求：v0.3.0+（使用新的 fitter_factory 模式，避免嵌套并行问题）。
+  - 版本要求：
+    - autotau 版本：v0.3.1+（使用简化的接口，不再需要外部并行执行器）。
+  - 迁移说明：
+    - 如果从 autotau v0.3.0 升级，请参考 `AUTOTAU_0.3.1_MIGRATION.md`。
+    - 主要变更：移除了 `max_workers` 参数，添加了 `window_start_idx_step`、`normalize`、`language` 参数。
 
 - `estimate_period_from_signal(time: np.ndarray, signal: np.ndarray) -> float`
   - 作用：从信号中自动估计周期（使用 FFT 或自相关方法）。
