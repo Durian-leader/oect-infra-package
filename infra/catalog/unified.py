@@ -376,11 +376,11 @@ class UnifiedExperiment:
             validate_files: 是否验证文件是否存在（默认 True，自动修复不一致）
 
         Returns:
-            bool: 如果数据库中有 v2_feature_metadata 且文件存在，返回 True
+            bool: 如果数据库中有 v2_feature_metadata 且文件存在，或文件系统中有 V2 特征文件，返回 True
 
         注意：
             - validate_files=True 时，会自动验证 output_files 中的文件是否存在
-            - 如果文件不存在，会自动清理数据库记录并返回 False
+            - 如果数据库元数据不存在，会回退检查文件系统中是否有 V2 特征文件
             - 这确保了数据库和文件系统的一致性
         """
         if self.id is None:
@@ -394,22 +394,35 @@ class UnifiedExperiment:
         # 新行为：验证文件存在性
         metadata = self.get_v2_features_metadata(validate_files=True)
 
-        if not metadata:
+        if metadata:
+            # 检查是否有有效的输出文件
+            output_files = metadata.get('output_files', [])
+
+            # 只要有输出文件就认为有 V2 特征
+            if output_files:
+                return True
+
+            # 没有输出文件，清理无效的元数据
+            logger.debug(f"实验 {self.id} 数据库元数据无效（没有输出文件）")
+            self.clear_v2_features_metadata()
+            # 继续检查文件系统
+
+        # 元数据缺失或无效，回退检查文件系统
+        from pathlib import Path
+
+        features_v2_dir = self._manager.catalog.config.get_absolute_path('features_v2')
+        if not features_v2_dir.exists():
             return False
 
-        # 检查是否有有效的输出文件
-        output_files = metadata.get('output_files', [])
-        configs_used = metadata.get('configs_used', [])
+        # 搜索匹配的 parquet 文件
+        pattern = f"{self.chip_id}-{self.device_id}-*-feat_*.parquet"
+        matching_files = list(features_v2_dir.glob(pattern))
 
-        # 如果没有配置或没有文件，说明没有有效特征
-        if not configs_used or not output_files:
-            logger.debug(f"实验 {self.id} 没有有效的 V2 特征（configs={configs_used}, files={len(output_files)}）")
-            # 清理无效的元数据
-            if metadata.get('configs_used') or metadata.get('output_files'):
-                self.clear_v2_features_metadata()
-            return False
+        if matching_files:
+            logger.debug(f"实验 {self.id} 在文件系统中找到 {len(matching_files)} 个 V2 特征文件")
+            return True
 
-        return True
+        return False
 
     def get_v2_features_metadata(self, validate_files: bool = True) -> Optional[Dict[str, Any]]:
         """获取 V2 特征元数据
@@ -563,19 +576,175 @@ class UnifiedExperiment:
 
         return result
 
+    def _infer_feature_names_from_dataframe(self, df: pd.DataFrame) -> Dict[str, List[str]]:
+        """从 DataFrame 列名推断特征名列表
+
+        Args:
+            df: V2 特征 DataFrame
+
+        Returns:
+            Dict: {
+                'scalar_features': ['feature1', 'feature2', ...],  # 标量特征名列表
+                'multidim_features': {
+                    'feature3': ['feature3_dim0', 'feature3_dim1', ...],  # 多维特征名 -> 列名列表
+                    ...
+                }
+            }
+        """
+        scalar_features = []
+        multidim_features = {}
+        processed_cols = {'step_index'}  # 始终跳过 step_index
+
+        for col in df.columns:
+            if col in processed_cols:
+                continue
+
+            # 检查是否为多维特征的一部分（使用 _dim 后缀）
+            if '_dim' in col:
+                # 提取基础特征名（去除 _dimN 后缀）
+                parts = col.rsplit('_dim', 1)
+                if len(parts) == 2:
+                    base_name = parts[0]
+                    dim_suffix = parts[1]
+
+                    # 验证后缀是数字
+                    if dim_suffix.isdigit():
+                        if base_name not in multidim_features:
+                            # 收集该特征的所有维度列
+                            all_related = sorted([
+                                c for c in df.columns
+                                if c.startswith(f'{base_name}_dim') and
+                                c.split('_dim')[-1].isdigit()
+                            ])
+                            multidim_features[base_name] = all_related
+                            processed_cols.update(all_related)
+                    else:
+                        # 不是标准的多维特征，作为标量处理
+                        scalar_features.append(col)
+                        processed_cols.add(col)
+                else:
+                    scalar_features.append(col)
+                    processed_cols.add(col)
+            else:
+                # 标量特征
+                scalar_features.append(col)
+                processed_cols.add(col)
+
+        return {
+            'scalar_features': scalar_features,
+            'multidim_features': multidim_features
+        }
+
+    def _select_columns_by_feature_names(
+        self,
+        df: pd.DataFrame,
+        feature_names: Union[str, List[str]]
+    ) -> pd.DataFrame:
+        """根据特征名筛选 DataFrame 列（支持通配符）
+
+        Args:
+            df: V2 特征 DataFrame
+            feature_names: 特征名或特征名列表，支持通配符（如 'gm_*', '*_max'）
+
+        Returns:
+            pd.DataFrame: 筛选后的 DataFrame（总是包含 step_index）
+
+        Raises:
+            KeyError: 如果任何指定的特征名（展开通配符后）不存在
+
+        Examples:
+            # 单个标量特征
+            df_filtered = exp._select_columns_by_feature_names(df, 'gm_max')
+
+            # 多个特征
+            df_filtered = exp._select_columns_by_feature_names(df, ['gm_max', 'Von'])
+
+            # 使用通配符
+            df_filtered = exp._select_columns_by_feature_names(df, 'gm_*')
+
+            # 多维特征（返回所有维度）
+            df_filtered = exp._select_columns_by_feature_names(df, 'gm_max_both')
+        """
+        import fnmatch
+
+        # 规范化输入为列表
+        if isinstance(feature_names, str):
+            feature_names = [feature_names]
+
+        # 推断可用的特征名
+        feature_info = self._infer_feature_names_from_dataframe(df)
+        scalar_features = feature_info['scalar_features']
+        multidim_features = feature_info['multidim_features']
+        all_feature_names = set(scalar_features) | set(multidim_features.keys())
+
+        # 展开通配符并匹配特征名
+        selected_feature_names = set()
+        for pattern in feature_names:
+            if '*' in pattern or '?' in pattern:
+                # 通配符匹配
+                matched = fnmatch.filter(all_feature_names, pattern)
+                if matched:
+                    selected_feature_names.update(matched)
+                else:
+                    logger.warning(f"通配符模式 '{pattern}' 没有匹配任何特征")
+            else:
+                # 精确匹配
+                selected_feature_names.add(pattern)
+
+        # 验证所有特征名是否存在
+        missing_features = selected_feature_names - all_feature_names
+        if missing_features:
+            available = ', '.join(sorted(all_feature_names))
+            missing = ', '.join(sorted(missing_features))
+            raise KeyError(
+                f"以下特征不存在: {missing}\n"
+                f"可用特征: {available}"
+            )
+
+        # 收集需要保留的列名
+        columns_to_keep = ['step_index']  # 总是保留 step_index
+
+        for feat_name in selected_feature_names:
+            if feat_name in scalar_features:
+                # 标量特征：直接添加列名
+                columns_to_keep.append(feat_name)
+            elif feat_name in multidim_features:
+                # 多维特征：添加所有维度的列
+                columns_to_keep.extend(multidim_features[feat_name])
+
+        # 筛选 DataFrame
+        # 确保保留的列确实存在于 DataFrame 中
+        available_columns = [col for col in columns_to_keep if col in df.columns]
+
+        if len(available_columns) == 1:  # 只有 step_index
+            logger.warning("筛选后只剩下 step_index 列，没有选中任何特征")
+
+        return df[available_columns]
+
     def get_v2_feature_dataframe(
         self,
         config_name: Optional[str] = None,
-        file_path: Optional[str] = None
+        file_path: Optional[str] = None,
+        feature_names: Optional[Union[str, List[str]]] = None
     ) -> Optional[pd.DataFrame]:
         """读取已计算的 V2 特征（从 Parquet 文件）
 
         Args:
             config_name: 配置名称（用于从元数据中查找文件）
             file_path: 直接指定 Parquet 文件路径（优先级高于 config_name）
+            feature_names: 特征名称列表（可选），用于筛选特定特征
+                - None：返回所有特征（默认行为）
+                - str：单个特征名，如 'gm_max'
+                - List[str]：多个特征名，如 ['gm_max', 'Von']
+                - 支持通配符：'gm_*', '*_max', 'transient_*'
+                - 对于多维特征（如 'gm_max_both'），返回所有展开列
+                - step_index 列总是包含在结果中
 
         Returns:
             pd.DataFrame: 特征数据框，如果文件不存在返回 None
+
+        Raises:
+            KeyError: 如果指定的特征名不存在
 
         Examples:
             # 方式1: 通过配置名称读取（从元数据查找）
@@ -586,15 +755,35 @@ class UnifiedExperiment:
 
             # 方式3: 读取最新的特征文件（不指定配置）
             df = exp.get_v2_feature_dataframe()
+
+            # 方式4: 获取单个特征
+            df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names='gm_max')
+
+            # 方式5: 获取多个特征
+            df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names=['gm_max', 'Von', 'absI_max'])
+
+            # 方式6: 使用通配符获取所有 gm 相关特征
+            df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names='gm_*')
+
+            # 方式7: 获取多维特征（返回所有维度）
+            df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names='transient_cycles')
         """
         import pandas as pd
         from pathlib import Path
+
+        # 内部辅助函数：应用特征筛选
+        def _apply_feature_filter(df: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+            """在返回前应用特征筛选（如果指定了 feature_names）"""
+            if df is None or feature_names is None:
+                return df
+            return self._select_columns_by_feature_names(df, feature_names)
 
         # 如果直接指定文件路径
         if file_path:
             if Path(file_path).exists():
                 logger.info(f"从文件读取 V2 特征: {file_path}")
-                return pd.read_parquet(file_path)
+                df = pd.read_parquet(file_path)
+                return _apply_feature_filter(df)
             else:
                 logger.warning(f"V2 特征文件不存在: {file_path}")
                 return None
@@ -622,7 +811,7 @@ class UnifiedExperiment:
                         # 验证配置名是否匹配
                         if self._validate_v2_feature_file(df, config_name, target_file):
                             logger.info(f"从元数据读取 V2 特征: {Path(target_file).name}")
-                            return df
+                            return _apply_feature_filter(df)
                         else:
                             logger.warning(f"文件验证失败，将触发重新计算")
                     else:
@@ -632,7 +821,8 @@ class UnifiedExperiment:
                 target_file = output_files[-1]
                 if Path(target_file).exists():
                     logger.info(f"从文件读取 V2 特征: {target_file}")
-                    return pd.read_parquet(target_file)
+                    df = pd.read_parquet(target_file)
+                    return _apply_feature_filter(df)
 
         # Fallback: 元数据缺失或文件不存在，尝试从文件系统搜索
         logger.warning(f"实验 {self.id} 元数据缺失，尝试从文件系统搜索...")
@@ -682,7 +872,7 @@ class UnifiedExperiment:
         if self.id is not None:
             self._auto_fix_v2_metadata_from_file(str(target_file), config_name)
 
-        return df
+        return _apply_feature_filter(df)
 
     def _validate_v2_feature_file(
         self, df: pd.DataFrame, config_name: Optional[str], file_path: str

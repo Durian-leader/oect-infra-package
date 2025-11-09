@@ -261,7 +261,11 @@ Catalog 模块已完整集成 `features_v2` 特征提取系统，提供统一的
   - 自动保存元数据到数据库（`v2_feature_metadata`）
 - `has_v2_features(validate_files: bool = True) -> bool` - 检查是否已有 V2 特征，并可自动清理失效的文件记录
 - `get_v2_features_metadata(validate_files: bool = True) -> Optional[Dict]` - 获取/校验 V2 特征元数据
-- `get_v2_feature_dataframe(config_name: Optional[str] = None, file_path: Optional[str] = None) -> Optional[pd.DataFrame]` - 读取已计算的 V2 特征（优先读取元数据记录的文件，缺失时回退扫描文件系统）
+- `get_v2_feature_dataframe(config_name: Optional[str] = None, file_path: Optional[str] = None, feature_names: Optional[Union[str, List[str]]] = None) -> Optional[pd.DataFrame]` - 读取已计算的 V2 特征（优先读取元数据记录的文件，缺失时回退扫描文件系统）
+  - `feature_names`: 可选的特征名筛选（支持单个特征、列表、通配符）
+  - 支持通配符模式：`'gm_*'`, `'*_max'`, `'transient_*'`
+  - 多维特征自动展开所有维度（如 `'transient_cycles'` → 所有 `transient_cycles_dim0..dimN` 列）
+  - `step_index` 总是包含在结果中
 - `sync_v2_features_from_filesystem(auto_remove_missing: bool = True) -> Dict` - 从文件系统扫描并同步元数据（新/旧命名均支持）
 - `clear_v2_features_metadata() -> None` - 清空数据库中的 V2 元数据（不删除磁盘文件）
 
@@ -287,6 +291,22 @@ Catalog 模块已完整集成 `features_v2` 特征提取系统，提供统一的
 ```python
 exp = manager.get_experiment(chip_id="#20250804008", device_id="3")
 result_df = exp.extract_features_v2('v2_transfer_basic', output_format='dataframe')
+```
+
+- 特征筛选（读取指定特征）:
+```python
+# 读取单个特征
+df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names='gm_max')
+
+# 读取多个特征
+df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names=['gm_max', 'Von', 'absI_max'])
+
+# 使用通配符获取所有 gm 相关特征
+df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names='gm_*')
+
+# 获取多维特征（自动返回所有维度）
+df = exp.get_v2_feature_dataframe('v2_ml_ready', feature_names='transient_cycles')
+# 返回: step_index, transient_cycles_dim0, transient_cycles_dim1, ..., transient_cycles_dimN
 ```
 
 - 批量提取:

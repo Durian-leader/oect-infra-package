@@ -1,1 +1,9 @@
 logs/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# PyPI cache
+.eggs/

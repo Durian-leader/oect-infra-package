@@ -530,6 +530,18 @@ class FeatureSet:
 
         # 添加元数据
         if save_metadata and self.unified_experiment:
+            # 推断特征名列表（区分标量和多维特征）
+            scalar_features = []
+            multidim_features = {}
+
+            for name, array in self._computed_results.results.items():
+                if name not in self.graph.nodes:
+                    continue  # 跳过数据源节点
+                if array.ndim == 1:
+                    scalar_features.append(name)
+                elif array.ndim == 2:
+                    multidim_features[name] = array.shape[1]
+
             final_df.attrs = {
                 'chip_id': self.unified_experiment.chip_id,
                 'device_id': self.unified_experiment.device_id,
@@ -538,9 +550,12 @@ class FeatureSet:
                 'source_file': str(self.unified_experiment._get_experiment().hdf5_path),  # 转换为字符串
                 'source_hash': self._compute_source_hash(),
                 'created_at': pd.Timestamp.now().isoformat(),
-                'feature_count': len(final_df.columns) - 1
+                'feature_count': len(final_df.columns) - 1,
+                'scalar_features': scalar_features,  # 新增：标量特征名列表
+                'multidim_features': multidim_features  # 新增：多维特征名及其维度数
             }
-            logger.debug(f"已添加元数据: source_hash={final_df.attrs['source_hash']}")
+            logger.debug(f"已添加元数据: source_hash={final_df.attrs['source_hash']}, "
+                        f"scalar_features={len(scalar_features)}, multidim_features={len(multidim_features)}")
 
         # 保存
         final_df.to_parquet(output_path, compression='zstd', index=False)
