@@ -2,6 +2,7 @@
 """Batch transfer characteristic analysis for 3D numpy arrays"""
 
 from dataclasses import dataclass
+from functools import cached_property
 from numpy.typing import NDArray
 import numpy as np
 from typing import Optional, Dict, Any
@@ -69,21 +70,11 @@ class BatchTransfer:
         
         # Compute turning point indices for all steps (中点作为转折点)
         self.tp_idx = (self.data_point_count - 1) // 2
-        
-        # Initialize all transfer characteristics
+
+        # Initialize only essential base sequences (Vg and I)
+        # Other properties (gm, Point characteristics) are lazy-loaded via @cached_property
         self.Vg = self._compute_vg_sequences()
         self.I = self._compute_i_sequences()
-        self.gm = self._compute_gm_sequences()
-        
-        # Point characteristics
-        self.absgm_max = self._compute_absgm_max()
-        self.gm_max = self._compute_gm_max()
-        self.gm_min = self._compute_gm_min()
-        self.absI_max = self._compute_absI_max()
-        self.I_max = self._compute_I_max()
-        self.absI_min = self._compute_absI_min()
-        self.I_min = self._compute_I_min()
-        self.Von = self._compute_Von()
     
     def _compute_vg_sequences(self) -> BatchSequence:
         """Compute gate voltage sequences for all steps"""
@@ -110,7 +101,56 @@ class BatchTransfer:
         reverse = self.data_3d[:, 1, self.tp_idx + 1:]
         
         return BatchSequence(raw=raw, forward=forward, reverse=reverse)
-    
+
+    # ===== Lazy-loaded properties using @cached_property =====
+
+    @cached_property
+    def gm(self) -> BatchSequence:
+        """Compute transconductance (gm) sequences (lazy-loaded, cached)"""
+        return self._compute_gm_sequences()
+
+    @cached_property
+    def absgm_max(self) -> BatchPoint:
+        """Compute maximum absolute transconductance (lazy-loaded, cached)"""
+        return self._compute_absgm_max()
+
+    @cached_property
+    def gm_max(self) -> BatchPoint:
+        """Compute maximum transconductance (lazy-loaded, cached)"""
+        return self._compute_gm_max()
+
+    @cached_property
+    def gm_min(self) -> BatchPoint:
+        """Compute minimum transconductance (lazy-loaded, cached)"""
+        return self._compute_gm_min()
+
+    @cached_property
+    def absI_max(self) -> BatchPoint:
+        """Compute maximum absolute current (lazy-loaded, cached)"""
+        return self._compute_absI_max()
+
+    @cached_property
+    def I_max(self) -> BatchPoint:
+        """Compute maximum current (lazy-loaded, cached)"""
+        return self._compute_I_max()
+
+    @cached_property
+    def absI_min(self) -> BatchPoint:
+        """Compute minimum absolute current (lazy-loaded, cached)"""
+        return self._compute_absI_min()
+
+    @cached_property
+    def I_min(self) -> BatchPoint:
+        """Compute minimum current (lazy-loaded, cached)"""
+        return self._compute_I_min()
+
+    @cached_property
+    def Von(self) -> BatchPoint:
+        """Compute threshold voltage (Von) (lazy-loaded, cached)"""
+        return self._compute_Von()
+
+    # ===== Computation methods (called by cached_property decorators) =====
+
     def _compute_gm_sequences(self) -> BatchSequence:
         """Compute transconductance (gm) sequences for all steps"""
         # Compute gm for each direction using vectorized operations
