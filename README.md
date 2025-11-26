@@ -1,5 +1,7 @@
 # OECT-Infra
 
+CN: [README_CN.md](README_CN.md)
+
 **A comprehensive data processing infrastructure for OECT (Organic Electrochemical Transistor) experiments**
 
 [![PyPI version](https://badge.fury.io/py/oect-infra.svg)](https://badge.fury.io/py/oect-infra)
